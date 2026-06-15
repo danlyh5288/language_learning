@@ -19,6 +19,25 @@ protocol.registerSchemesAsPrivileged([
 let mainWindow: BrowserWindow | null = null;
 let store: VocabularyStore | null = null;
 
+function showMainWindow(): void {
+  if (!mainWindow) {
+    return;
+  }
+
+  if (!mainWindow.isVisible()) {
+    mainWindow.show();
+  }
+
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+
+  mainWindow.focus();
+  if (process.platform === "darwin") {
+    app.focus({ steal: true });
+  }
+}
+
 async function createWindow(): Promise<void> {
   mainWindow = new BrowserWindow({
     width: 1360,
@@ -27,11 +46,17 @@ async function createWindow(): Promise<void> {
     minHeight: 720,
     title: "发音词库",
     backgroundColor: "#f6f8f7",
+    show: false,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
       preload: path.join(__dirname, "preload.js")
     }
+  });
+
+  mainWindow.once("ready-to-show", showMainWindow);
+  mainWindow.on("closed", () => {
+    mainWindow = null;
   });
 
   if (app.isPackaged) {
@@ -40,6 +65,8 @@ async function createWindow(): Promise<void> {
     await mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL ?? "http://127.0.0.1:5173");
     mainWindow.webContents.openDevTools({ mode: "detach" });
   }
+
+  setTimeout(showMainWindow, 1000);
 }
 
 function setupProtocol(vocabularyStore: VocabularyStore): void {
@@ -78,6 +105,8 @@ app.whenReady().then(async () => {
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       void createWindow();
+    } else {
+      showMainWindow();
     }
   });
 });
