@@ -90,9 +90,14 @@ button {
   width: 38px;
   height: 38px;
   place-items: center;
-  color: #ffffff;
-  background: var(--primary);
+  background: transparent;
   border-radius: var(--radius);
+}
+
+.brand-mark img {
+  width: 38px;
+  height: 38px;
+  display: block;
 }
 
 .brand h1 {

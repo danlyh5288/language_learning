@@ -15,6 +15,7 @@ import {
   X
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import appLogo from "../assets/app-logo.svg";
 import { api, isElectronRuntime } from "./api";
 import {
   type TagRecord,
@@ -295,7 +296,7 @@ export default function App() {
       <aside className="sidebar" aria-label="标签">
         <div className="brand">
           <div className="brand-mark">
-            <BookOpen size={18} />
+            <img src={appLogo} alt="" aria-hidden="true" />
           </div>
           <div>
             <h1>发音词库</h1>
