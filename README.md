@@ -44,11 +44,20 @@ Build:
 npm run build
 ```
 
+Package a macOS DMG:
+
+```bash
+npm run dist:mac
+```
+
+The DMG is written to `release/`. Local DMG artifacts are ignored by Git. The local build targets the current Mac architecture and is unsigned by default, so macOS may show the standard warning for unidentified developers.
+
 Run checks:
 
 ```bash
 npm run typecheck
 npm test -- --run
+npm run build
 npm audit
 ```
 

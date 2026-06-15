@@ -343,7 +343,7 @@ export class VocabularyStore {
 
 export async function createVocabularyStore(userDataPath: string): Promise<VocabularyStore> {
   const SQL: SqlJsStatic = await initSqlJs({
-    locateFile: (file) => path.join(process.cwd(), "node_modules", "sql.js", "dist", file)
+    locateFile: (file) => path.join(__dirname, "..", "..", "node_modules", "sql.js", "dist", file)
   });
   const dataDir = path.join(userDataPath, "data");
   const dbPath = path.join(dataDir, "vocabulary.sqlite");
