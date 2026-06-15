@@ -3,18 +3,41 @@
   "version": "0.1.0",
   "description": "Local pronunciation vocabulary tool for language learning.",
   "main": "dist-electron/electron/main.js",
+  "author": "danlyh5288",
   "private": true,
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "dev:renderer": "vite --host 127.0.0.1",
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.node.json && vite build",
+    "dist:mac": "npm run build && electron-builder --mac dmg",
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit"
   },
+  "build": {
+    "appId": "com.local.pronunciationvault",
+    "productName": "发音词库",
+    "copyright": "Copyright © 2026",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.education",
+      "identity": null,
+      "target": "dmg"
+    },
+    "dmg": {
+      "artifactName": "FaYinCiKu-${version}-${arch}.${ext}"
+    }
+  },
   "dependencies": {
-    "@vitejs/plugin-react": "^6.0.2",
-    "electron": "^42.4.0",
     "lucide-react": "^0.468.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -28,6 +51,9 @@
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "@types/sql.js": "^1.4.9",
+    "@vitejs/plugin-react": "^6.0.2",
+    "electron": "^42.4.0",
+    "electron-builder": "^26.15.3",
     "jsdom": "^29.1.1",
     "typescript": "^5.7.2",
     "vite": "^8.0.16",

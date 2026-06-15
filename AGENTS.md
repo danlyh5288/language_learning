@@ -17,6 +17,7 @@ This is a local-first Electron app for pronunciation vocabulary study. Preserve 
 
 - Keep user data local by default. Do not add cloud services, telemetry, or remote sync without an explicit request.
 - Do not commit generated outputs: `node_modules/`, `dist/`, `dist-electron/`, `.npm-cache/`, screenshots, or app data.
+- Do not commit packaged app artifacts from `release/`.
 - Prefer small typed IPC methods over broad generic channels.
 - Keep recording replacement safe: save the new audio first, update metadata, then remove the old file.
 - UI changes should preserve the three-column calm study-tool layout unless the user asks for a redesign.
