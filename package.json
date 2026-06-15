@@ -34,7 +34,25 @@
       "target": "dmg"
     },
     "dmg": {
-      "artifactName": "FaYinCiKu-${version}-${arch}.${ext}"
+      "artifactName": "FaYinCiKu-${version}-${arch}.${ext}",
+      "title": "发音词库 ${version}",
+      "contents": [
+        {
+          "x": 150,
+          "y": 170,
+          "type": "file"
+        },
+        {
+          "x": 390,
+          "y": 170,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "window": {
+        "width": 540,
+        "height": 360
+      }
     }
   },
   "dependencies": {
