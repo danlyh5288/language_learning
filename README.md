@@ -38,6 +38,14 @@ Run only the renderer preview:
 npm run dev:renderer
 ```
 
+Run the mobile app from the Expo workspace:
+
+```bash
+npm run mobile:dev
+npm run mobile:ios
+npm run mobile:android
+```
+
 Build:
 
 ```bash
@@ -72,8 +80,10 @@ The renderer uses a safe preload API instead of direct Node access. Audio playba
 
 When running the renderer outside Electron, the app uses a browser-only preview API backed by `localStorage`. That preview mode is for UI development only.
 
+In React Native, `mobile/` uses an independent Expo SQLite database named `vocabulary.sqlite` and stores recordings inside the app sandbox. The mobile app starts from its own empty local library and does not read or sync the Electron data directory.
+
 ## MVP Limits
 
-- No accounts, sync, import/export, mobile app, or cloud backup yet.
+- No accounts, sync, import/export, cloud backup, or desktop-to-mobile migration yet.
 - Each word has one primary tag and one current recording.
 - No automatic transcription, pronunciation scoring, or teacher reference audio.

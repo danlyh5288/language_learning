@@ -5,11 +5,23 @@
   "main": "dist-electron/electron/main.js",
   "author": "danlyh5288",
   "private": true,
+  "workspaces": [
+    "mobile"
+  ],
+  "overrides": {
+    "js-yaml": "^4.2.0",
+    "uuid": "^11.1.1"
+  },
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "dev:renderer": "vite --host 127.0.0.1",
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.node.json && vite build",
     "dist:mac": "npm run build && electron-builder --mac dmg",
+    "mobile:dev": "npm run start --workspace @pronunciation-vault/mobile",
+    "mobile:ios": "npm run ios --workspace @pronunciation-vault/mobile",
+    "mobile:android": "npm run android --workspace @pronunciation-vault/mobile",
+    "mobile:typecheck": "npm run typecheck --workspace @pronunciation-vault/mobile",
+    "mobile:test": "npm run test --workspace @pronunciation-vault/mobile",
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit"
@@ -58,8 +70,8 @@
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
     "sql.js": "^1.13.0"
   },
   "devDependencies": {

@@ -32,5 +32,11 @@ jobs:
       - name: Test
         run: npm test -- --run
 
+      - name: Mobile typecheck
+        run: npm run mobile:typecheck
+
+      - name: Mobile test
+        run: npm run mobile:test
+
       - name: Build
         run: npm run build
