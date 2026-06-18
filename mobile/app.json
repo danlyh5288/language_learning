@@ -8,10 +8,12 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.local.pronunciationvault.mobile"
+      "bundleIdentifier": "com.local.pronunciationvault.mobile",
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
       "package": "com.local.pronunciationvault.mobile",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -24,6 +26,10 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
+      "@react-native-firebase/firestore",
+      "@react-native-firebase/storage",
       [
         "expo-audio",
         {

@@ -1,7 +1,11 @@
 node_modules/
 dist/
 dist-electron/
+functions/lib/
 release/
 build/icon.iconset/
 .npm-cache/
+.expo/
+mobile/GoogleService-Info.plist
+mobile/google-services.json
 .DS_Store

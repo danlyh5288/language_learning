@@ -1,0 +1,61 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function owns(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function hasCloudSync(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId)/entitlements/cloudSync) &&
+        get(/databases/$(database)/documents/users/$(userId)/entitlements/cloudSync).data.active == true;
+    }
+
+    function userShellKeys() {
+      return ["libraryInitialized", "updatedAt"];
+    }
+
+    function tagKeys() {
+      return ["name", "color", "createdAt", "updatedAt", "deletedAt"];
+    }
+
+    function wordKeys() {
+      return ["text", "tagId", "toneNote", "recording", "createdAt", "updatedAt", "deletedAt"];
+    }
+
+    match /users/{userId} {
+      allow read: if owns(userId);
+      allow create, update: if owns(userId) &&
+        hasCloudSync(userId) &&
+        request.resource.data.keys().hasOnly(userShellKeys());
+      allow delete: if false;
+
+      match /entitlements/{entitlementId} {
+        allow read: if owns(userId);
+        allow write: if false;
+      }
+
+      match /tags/{tagId} {
+        allow read, create, update: if owns(userId) &&
+          hasCloudSync(userId) &&
+          request.resource.data.keys().hasOnly(tagKeys()) &&
+          request.resource.data.name is string &&
+          request.resource.data.color is string;
+        allow delete: if false;
+      }
+
+      match /words/{wordId} {
+        allow read, create, update: if owns(userId) &&
+          hasCloudSync(userId) &&
+          request.resource.data.keys().hasOnly(wordKeys()) &&
+          request.resource.data.text is string &&
+          request.resource.data.toneNote is string;
+        allow delete: if false;
+      }
+    }
+  }
+}

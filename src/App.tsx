@@ -2,10 +2,14 @@ import {
   AlertCircle,
   BookOpen,
   Check,
+  Cloud,
   ListMusic,
+  LogIn,
+  LogOut,
   Mic,
   Play,
   Plus,
+  RefreshCw,
   RotateCcw,
   Save,
   Search,
@@ -19,6 +23,7 @@ import appLogo from "../assets/app-logo.svg";
 import { api, isElectronRuntime } from "./api";
 import {
   type TagRecord,
+  type CloudSyncStatus,
   UNTAGGED_FILTER_ID,
   type WordInput,
   type WordRecord
@@ -51,9 +56,24 @@ export default function App() {
   const [playingWordId, setPlayingWordId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [cloudStatus, setCloudStatus] = useState<CloudSyncStatus | null>(null);
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [isCloudBusy, setIsCloudBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const listAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const loadCloudStatus = useCallback(async () => {
+    if (!api.cloudSync) {
+      return;
+    }
+    try {
+      setCloudStatus(await api.cloudSync.getStatus());
+    } catch (caught) {
+      setError(errorMessage(caught));
+    }
+  }, []);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -67,12 +87,13 @@ export default function App() {
       setTags(nextTags);
       setAllWords(nextAllWords);
       setError(null);
+      await loadCloudStatus();
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
       setIsLoading(false);
     }
-  }, [activeTagId, query]);
+  }, [activeTagId, loadCloudStatus, query]);
 
   useEffect(() => {
     void loadData();
@@ -291,6 +312,119 @@ export default function App() {
     setMessage("新录音待保存");
   }
 
+  async function signIn() {
+    if (!api.auth || !authEmail.trim() || !authPassword) {
+      return;
+    }
+    setIsCloudBusy(true);
+    setError(null);
+    try {
+      await api.auth.signIn({ email: authEmail, password: authPassword });
+      setAuthPassword("");
+      setMessage("已登录");
+      await loadCloudStatus();
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setIsCloudBusy(false);
+    }
+  }
+
+  async function signUp() {
+    if (!api.auth || !authEmail.trim() || !authPassword) {
+      return;
+    }
+    setIsCloudBusy(true);
+    setError(null);
+    try {
+      await api.auth.signUp({ email: authEmail, password: authPassword });
+      setAuthPassword("");
+      setMessage("账号已创建");
+      await loadCloudStatus();
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setIsCloudBusy(false);
+    }
+  }
+
+  async function signOut() {
+    if (!api.auth) {
+      return;
+    }
+    setIsCloudBusy(true);
+    setError(null);
+    try {
+      await api.auth.signOut();
+      setSelectedWord(null);
+      setIsCreating(false);
+      setDraft(emptyDraft);
+      setMessage("已退出云端账号");
+      await loadData();
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setIsCloudBusy(false);
+    }
+  }
+
+  async function enableCloudSync() {
+    if (!api.cloudSync) {
+      return;
+    }
+    setIsCloudBusy(true);
+    setError(null);
+    try {
+      await api.cloudSync.enable();
+      setSelectedWord(null);
+      setIsCreating(false);
+      setDraft(emptyDraft);
+      setMessage("已开启云同步");
+      await loadData();
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setIsCloudBusy(false);
+    }
+  }
+
+  async function disableCloudSync() {
+    if (!api.cloudSync) {
+      return;
+    }
+    setIsCloudBusy(true);
+    setError(null);
+    try {
+      await api.cloudSync.disable();
+      setSelectedWord(null);
+      setIsCreating(false);
+      setDraft(emptyDraft);
+      setMessage("已切换到本地模式");
+      await loadData();
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setIsCloudBusy(false);
+    }
+  }
+
+  async function refreshCloudSync() {
+    if (!api.cloudSync) {
+      return;
+    }
+    setIsCloudBusy(true);
+    setError(null);
+    try {
+      await api.cloudSync.refresh();
+      await loadData();
+      setMessage("云同步已刷新");
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setIsCloudBusy(false);
+    }
+  }
+
   return (
     <main className="app-shell">
       <aside className="sidebar" aria-label="标签">
@@ -300,9 +434,24 @@ export default function App() {
           </div>
           <div>
             <h1>发音词库</h1>
-            <p>{isElectronRuntime ? "本地模式" : "浏览器预览"}</p>
+            <p>{cloudStatus?.isEnabled ? "云端模式" : isElectronRuntime ? "本地模式" : "浏览器预览"}</p>
           </div>
         </div>
+
+        <CloudPanel
+          status={cloudStatus}
+          email={authEmail}
+          password={authPassword}
+          busy={isCloudBusy}
+          onEmailChange={setAuthEmail}
+          onPasswordChange={setAuthPassword}
+          onSignIn={() => void signIn()}
+          onSignUp={() => void signUp()}
+          onSignOut={() => void signOut()}
+          onEnable={() => void enableCloudSync()}
+          onDisable={() => void disableCloudSync()}
+          onRefresh={() => void refreshCloudSync()}
+        />
 
         <nav className="tag-nav">
           <FilterButton
@@ -526,6 +675,100 @@ type FilterButtonProps = {
   count: number;
   onClick: () => void;
 };
+
+type CloudPanelProps = {
+  status: CloudSyncStatus | null;
+  email: string;
+  password: string;
+  busy: boolean;
+  onEmailChange: (email: string) => void;
+  onPasswordChange: (password: string) => void;
+  onSignIn: () => void;
+  onSignUp: () => void;
+  onSignOut: () => void;
+  onEnable: () => void;
+  onDisable: () => void;
+  onRefresh: () => void;
+};
+
+function CloudPanel({
+  status,
+  email,
+  password,
+  busy,
+  onEmailChange,
+  onPasswordChange,
+  onSignIn,
+  onSignUp,
+  onSignOut,
+  onEnable,
+  onDisable,
+  onRefresh
+}: CloudPanelProps) {
+  const signedIn = Boolean(status?.user);
+  const canSubmitAuth = email.trim().length > 0 && password.length >= 6 && !busy;
+  const statusLabel = status?.isEnabled
+    ? status.pendingRecordingUploads > 0
+      ? `云端模式 · ${status.pendingRecordingUploads} 个录音待上传`
+      : "云端模式 · 已同步"
+    : signedIn
+      ? status?.isEntitled
+        ? "已登录 · 可开启云同步"
+        : "已登录 · 未开通订阅"
+      : "本地模式";
+
+  return (
+    <section className="cloud-panel" aria-label="云同步">
+      <div className="cloud-heading">
+        <Cloud size={15} />
+        <span>{statusLabel}</span>
+      </div>
+
+      {!signedIn ? (
+        <div className="cloud-auth">
+          <input
+            aria-label="云同步邮箱"
+            type="email"
+            value={email}
+            placeholder="邮箱"
+            onChange={(event) => onEmailChange(event.target.value)}
+          />
+          <input
+            aria-label="云同步密码"
+            type="password"
+            value={password}
+            placeholder="密码"
+            onChange={(event) => onPasswordChange(event.target.value)}
+          />
+          <div className="cloud-actions">
+            <button type="button" disabled={!canSubmitAuth} onClick={onSignIn}>
+              <LogIn size={14} />
+              登录
+            </button>
+            <button type="button" disabled={!canSubmitAuth} onClick={onSignUp}>注册</button>
+          </div>
+        </div>
+      ) : (
+        <div className="cloud-account">
+          <span title={status?.user?.email ?? undefined}>{status?.user?.email ?? "已登录"}</span>
+          <div className="cloud-actions">
+            {status?.isEnabled ? (
+              <button type="button" disabled={busy} onClick={onDisable}>停用</button>
+            ) : (
+              <button type="button" disabled={busy || !status?.isEntitled} onClick={onEnable}>开启</button>
+            )}
+            <button type="button" disabled={busy} aria-label="刷新云同步" onClick={onRefresh}>
+              <RefreshCw size={14} />
+            </button>
+            <button type="button" disabled={busy} aria-label="退出云端账号" onClick={onSignOut}>
+              <LogOut size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
 
 function FilterButton({ active, icon, label, count, onClick }: FilterButtonProps) {
   return (

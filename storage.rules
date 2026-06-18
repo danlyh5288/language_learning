@@ -1,0 +1,22 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function owns(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function hasCloudSync(userId) {
+      return firestore.exists(/databases/(default)/documents/users/$(userId)/entitlements/cloudSync) &&
+        firestore.get(/databases/(default)/documents/users/$(userId)/entitlements/cloudSync).data.active == true;
+    }
+
+    match /recordings/{userId}/{wordId}/{fileName} {
+      allow read, write: if owns(userId) && hasCloudSync(userId);
+    }
+  }
+}

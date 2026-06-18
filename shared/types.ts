@@ -11,6 +11,9 @@ export type WordRecord = {
   hasRecording: boolean;
   createdAt: string;
   updatedAt: string;
+  syncSource?: SyncSource;
+  hasPendingWrites?: boolean;
+  recordingUploadStatus?: RecordingUploadStatus;
 };
 
 export type TagRecord = {
@@ -18,6 +21,7 @@ export type TagRecord = {
   name: string;
   color: string;
   wordCount: number;
+  hasPendingWrites?: boolean;
 };
 
 export type WordListFilters = {
@@ -38,6 +42,37 @@ export type RecordingSaveInput = {
   durationMs: number;
 };
 
+export type SyncSource = "local" | "cloud";
+
+export type RecordingUploadStatus = "local" | "queued" | "uploading" | "uploaded" | "failed";
+
+export type CloudMode = "local" | "cloud";
+
+export type CloudUser = {
+  uid: string;
+  email: string | null;
+};
+
+export type AuthState = {
+  user: CloudUser | null;
+};
+
+export type CloudSyncStatus = {
+  mode: CloudMode;
+  user: CloudUser | null;
+  isEntitled: boolean;
+  isEnabled: boolean;
+  isOnline: boolean;
+  isSyncing: boolean;
+  pendingRecordingUploads: number;
+  lastSyncError: string | null;
+};
+
+export type AuthInput = {
+  email: string;
+  password: string;
+};
+
 export type VocabApi = {
   words: {
     list(filters?: WordListFilters): Promise<WordRecord[]>;
@@ -52,5 +87,17 @@ export type VocabApi = {
   recordings: {
     saveForWord(input: RecordingSaveInput): Promise<WordRecord>;
     getPlaybackUrl(wordId: string): Promise<string | null>;
+  };
+  auth?: {
+    getState(): Promise<AuthState>;
+    signIn(input: AuthInput): Promise<AuthState>;
+    signUp(input: AuthInput): Promise<AuthState>;
+    signOut(): Promise<AuthState>;
+  };
+  cloudSync?: {
+    getStatus(): Promise<CloudSyncStatus>;
+    enable(): Promise<CloudSyncStatus>;
+    disable(): Promise<CloudSyncStatus>;
+    refresh(): Promise<CloudSyncStatus>;
   };
 };

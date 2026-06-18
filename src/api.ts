@@ -18,10 +18,72 @@ type PreviewState = {
 };
 
 const PREVIEW_STORAGE_KEY = "pronunciation-vault-preview-state";
+const CLOUD_MODE_KEY = "pronunciation-vault-cloud-mode";
 const previewRecordingUrls = new Map<string, string>();
 
-export const api: VocabApi = window.vocabApi ?? createPreviewApi();
+const baseApi = window.vocabApi ?? createPreviewApi();
+let cloudApiPromise: Promise<VocabApi> | null = null;
+
+export const api: VocabApi = import.meta.env.MODE === "test" ? baseApi : createLazyFirebaseApi(baseApi);
 export const isElectronRuntime = Boolean(window.vocabApi);
+
+function createLazyFirebaseApi(localApi: VocabApi): VocabApi {
+  const shouldUseCloud = () => localStorage.getItem(CLOUD_MODE_KEY) === "cloud";
+  const getCloudApi = async () => {
+    cloudApiPromise ??= import("./firebaseCloudApi").then((module) => module.createFirebaseAwareApi(localApi));
+    return cloudApiPromise;
+  };
+
+  return {
+    words: {
+      list: async (filters?: WordListFilters) => shouldUseCloud() ? (await getCloudApi()).words.list(filters) : localApi.words.list(filters),
+      create: async (input: WordInput) => shouldUseCloud() ? (await getCloudApi()).words.create(input) : localApi.words.create(input),
+      update: async (id: string, input: WordInput) =>
+        shouldUseCloud() ? (await getCloudApi()).words.update(id, input) : localApi.words.update(id, input),
+      delete: async (id: string) => shouldUseCloud() ? (await getCloudApi()).words.delete(id) : localApi.words.delete(id)
+    },
+    tags: {
+      list: async () => shouldUseCloud() ? (await getCloudApi()).tags.list() : localApi.tags.list(),
+      create: async (name: string) => shouldUseCloud() ? (await getCloudApi()).tags.create(name) : localApi.tags.create(name)
+    },
+    recordings: {
+      saveForWord: async (input: RecordingSaveInput) =>
+        shouldUseCloud() ? (await getCloudApi()).recordings.saveForWord(input) : localApi.recordings.saveForWord(input),
+      getPlaybackUrl: async (wordId: string) =>
+        shouldUseCloud() ? (await getCloudApi()).recordings.getPlaybackUrl(wordId) : localApi.recordings.getPlaybackUrl(wordId)
+    },
+    auth: {
+      getState: async () => (await getCloudApi()).auth?.getState() ?? { user: null },
+      signIn: async (input) => (await getCloudApi()).auth?.signIn(input) ?? { user: null },
+      signUp: async (input) => (await getCloudApi()).auth?.signUp(input) ?? { user: null },
+      signOut: async () => (await getCloudApi()).auth?.signOut() ?? { user: null }
+    },
+    cloudSync: {
+      getStatus: async () => {
+        if (!shouldUseCloud() && !cloudApiPromise) {
+          return localCloudStatus();
+        }
+        return (await getCloudApi()).cloudSync?.getStatus() ?? localCloudStatus();
+      },
+      enable: async () => (await getCloudApi()).cloudSync?.enable() ?? Promise.reject(new Error("云同步不可用")),
+      disable: async () => (await getCloudApi()).cloudSync?.disable() ?? Promise.reject(new Error("云同步不可用")),
+      refresh: async () => (await getCloudApi()).cloudSync?.refresh() ?? Promise.reject(new Error("云同步不可用"))
+    }
+  };
+}
+
+function localCloudStatus() {
+  return {
+    mode: "local" as const,
+    user: null,
+    isEntitled: false,
+    isEnabled: false,
+    isOnline: navigator.onLine,
+    isSyncing: false,
+    pendingRecordingUploads: 0,
+    lastSyncError: null
+  };
+}
 
 function createPreviewApi(): VocabApi {
   return {
