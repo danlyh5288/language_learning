@@ -6,7 +6,8 @@
   "author": "danlyh5288",
   "private": true,
   "workspaces": [
-    "mobile"
+    "mobile",
+    "functions"
   ],
   "overrides": {
     "js-yaml": "^4.2.0",
@@ -22,7 +23,9 @@
     "mobile:android": "npm run android --workspace @pronunciation-vault/mobile",
     "mobile:typecheck": "npm run typecheck --workspace @pronunciation-vault/mobile",
     "mobile:test": "npm run test --workspace @pronunciation-vault/mobile",
+    "functions:build": "npm run build --workspace @pronunciation-vault/functions",
     "preview": "vite preview --host 127.0.0.1",
+    "test:firebase:rules": "firebase emulators:exec --only firestore,storage \"vitest --run --config firebase/vitest.config.ts\"",
     "test": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit"
   },
@@ -69,12 +72,14 @@
     }
   },
   "dependencies": {
+    "firebase": "^12.15.0",
     "lucide-react": "^0.468.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "sql.js": "^1.13.0"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",

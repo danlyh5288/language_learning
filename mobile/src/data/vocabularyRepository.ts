@@ -54,6 +54,22 @@ export async function migrateVocabularyDb(db: VocabDatabase): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_words_text ON words(text);
     CREATE INDEX IF NOT EXISTS idx_words_tag_id ON words(tag_id);
     CREATE INDEX IF NOT EXISTS idx_words_updated_at ON words(updated_at);
+
+    CREATE TABLE IF NOT EXISTS cloud_recording_uploads (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      word_id TEXT NOT NULL,
+      local_uri TEXT NOT NULL,
+      storage_path TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      duration_ms INTEGER NOT NULL,
+      error TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_cloud_recording_uploads_user_id ON cloud_recording_uploads(user_id);
+    CREATE INDEX IF NOT EXISTS idx_cloud_recording_uploads_word_id ON cloud_recording_uploads(word_id);
   `);
 }
 

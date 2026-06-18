@@ -9,6 +9,33 @@ async function createRepository() {
 }
 
 describe("VocabularyRepository", () => {
+  it("migrates the local cloud recording upload queue", async () => {
+    const db = await createSqlJsAdapter();
+    await migrateVocabularyDb(db);
+    await db.runAsync(
+      `
+        INSERT INTO cloud_recording_uploads
+          (id, user_id, word_id, local_uri, storage_path, mime_type, duration_ms, error, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
+      `,
+      [
+        "upload-1",
+        "user-1",
+        "word-1",
+        "file://recordings/local.m4a",
+        "recordings/user-1/word-1/upload-1.m4a",
+        "audio/m4a",
+        1800,
+        "2026-06-18T10:00:00.000Z",
+        "2026-06-18T10:00:00.000Z"
+      ]
+    );
+
+    await expect(db.getFirstAsync("SELECT id, word_id AS wordId FROM cloud_recording_uploads WHERE user_id = ?", [
+      "user-1"
+    ])).resolves.toEqual(expect.objectContaining({ id: "upload-1", wordId: "word-1" }));
+  });
+
   it("creates words, tags, and fresh tag counts", async () => {
     const repository = await createRepository();
     const daily = await repository.createTag("日常");

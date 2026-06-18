@@ -24,6 +24,70 @@ export const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bg
   },
+  cloudBar: {
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.surface
+  },
+  cloudStatusText: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "800"
+  },
+  cloudRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
+  cloudEmail: {
+    flex: 1,
+    minWidth: 0,
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: "700"
+  },
+  cloudAuthRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  cloudInput: {
+    minWidth: 128,
+    flexGrow: 1,
+    minHeight: 38,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    color: colors.text,
+    backgroundColor: "#f7faf8"
+  },
+  cloudButton: {
+    minHeight: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: colors.primarySoft
+  },
+  cloudButtonDisabled: {
+    backgroundColor: "#e8efec"
+  },
+  cloudButtonText: {
+    color: colors.primaryStrong,
+    fontSize: 13,
+    fontWeight: "800"
+  },
+  cloudErrorText: {
+    color: colors.danger,
+    fontSize: 12,
+    fontWeight: "700"
+  },
   screen: {
     flex: 1,
     backgroundColor: colors.bg

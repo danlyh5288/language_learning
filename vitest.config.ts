@@ -7,7 +7,7 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["src/test/setup.ts"],
-    exclude: ["**/node_modules/**", "**/dist/**", "**/dist-electron/**", "**/mobile/**"],
+    exclude: ["**/node_modules/**", "**/dist/**", "**/dist-electron/**", "**/mobile/**", "**/firebase/**"],
     css: true
   }
 });

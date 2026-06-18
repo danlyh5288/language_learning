@@ -1,7 +1,14 @@
 node_modules/
 dist/
 dist-electron/
+functions/lib/
 release/
 build/icon.iconset/
 .npm-cache/
+.expo/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+mobile/GoogleService-Info.plist
+mobile/google-services.json
 .DS_Store
