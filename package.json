@@ -25,7 +25,7 @@
     "mobile:test": "npm run test --workspace @pronunciation-vault/mobile",
     "functions:build": "npm run build --workspace @pronunciation-vault/functions",
     "preview": "vite preview --host 127.0.0.1",
-    "test:firebase:rules": "npx firebase-tools@15.22.0 emulators:exec --only firestore,storage \"vitest --run --config firebase/vitest.config.ts\"",
+    "test:firebase:rules": "firebase emulators:exec --only firestore,storage \"vitest --run --config firebase/vitest.config.ts\"",
     "test": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit"
   },
