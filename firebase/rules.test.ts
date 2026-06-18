@@ -15,7 +15,7 @@ let testEnv: RulesTestEnvironment;
 describe("Firebase security rules", () => {
   beforeAll(async () => {
     testEnv = await initializeTestEnvironment({
-      projectId: "language-vault-rules-test",
+      projectId: "language-vault-5a846",
       firestore: {
         rules: fs.readFileSync(path.join(process.cwd(), "firestore.rules"), "utf8")
       },
