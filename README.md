@@ -60,6 +60,16 @@ Package a macOS DMG:
 npm run dist:mac
 ```
 
+Package a macOS DMG and bump the desktop package version first:
+
+```bash
+npm run dist:mac:bump
+npm run dist:mac:bump --release=minor
+npm run dist:mac:bump --release=0.2.0
+```
+
+`dist:mac:bump` updates the root `package.json` version, which controls the DMG filename. It does not change the mobile workspace version.
+
 The DMG is written to `release/`. Local DMG artifacts are ignored by Git. The local build targets the current Mac architecture and is unsigned by default, so macOS may show the standard warning for unidentified developers.
 
 Run checks:
