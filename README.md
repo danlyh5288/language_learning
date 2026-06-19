@@ -115,6 +115,8 @@ Firebase project files:
 - `storage.rules` protects recording files behind Auth and active entitlement.
 - `functions/src/index.ts` contains Stripe entitlement webhook handling and old-recording cleanup.
 
+For desktop/Web builds, copy `.env.example` to `.env.local` and fill in the Firebase Web app config from Firebase Console. `.env.local` is ignored by Git.
+
 For mobile builds, download the Firebase native app config files and place them locally:
 
 - `mobile/GoogleService-Info.plist`

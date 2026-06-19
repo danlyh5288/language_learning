@@ -1,15 +1,5 @@
 import type { TagRecord, WordRecord } from "./types";
 
-export const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyC4y3A61w3yOZlUp64oJzIdrXAIuXGgfk0",
-  authDomain: "language-vault-5a846.firebaseapp.com",
-  projectId: "language-vault-5a846",
-  storageBucket: "language-vault-5a846.firebasestorage.app",
-  messagingSenderId: "947812044809",
-  appId: "1:947812044809:web:7f7f7021354f607a56e8d8",
-  measurementId: "G-7VT59S6SWE"
-} as const;
-
 export const TAG_COLORS = ["#2563eb", "#059669", "#7c3aed", "#d97706", "#dc2626", "#0891b2"] as const;
 
 export type FirebaseTimestampLike = {

@@ -8,6 +8,10 @@ All notable changes to this project will be documented in this file.
 
 - Add `version:bump` and `dist:mac:bump` scripts for versioned DMG packaging.
 
+### Changed
+
+- Load desktop Firebase Web config from local Vite env instead of committed source.
+
 ## 0.1.0 - 2026-06-18
 
 ### Added
