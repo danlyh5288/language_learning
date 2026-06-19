@@ -30,7 +30,6 @@ import {
   cloudTagToRecord,
   cloudWordToRecord,
   extensionForMimeType,
-  FIREBASE_CONFIG,
   recordingStoragePath,
   TAG_COLORS,
   userPath,
@@ -54,6 +53,7 @@ import {
   type WordListFilters,
   type WordRecord
 } from "../shared/types";
+import { getFirebaseWebConfig } from "./firebaseConfig";
 
 const CLOUD_MODE_KEY = "pronunciation-vault-cloud-mode";
 const QUEUE_DB_NAME = "pronunciation-vault-cloud-recordings";
@@ -476,7 +476,7 @@ class FirebaseCloudApi {
 async function getRuntime(): Promise<FirebaseRuntime> {
   if (!runtimePromise) {
     runtimePromise = Promise.resolve().then(() => {
-      const app = initializeApp(FIREBASE_CONFIG);
+      const app = initializeApp(getFirebaseWebConfig());
       return {
         app,
         auth: getAuth(app),

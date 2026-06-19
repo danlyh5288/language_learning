@@ -1,4 +1,3 @@
-import firebase from "@react-native-firebase/app";
 import auth from "@react-native-firebase/auth";
 import firestore from "@react-native-firebase/firestore";
 import storage from "@react-native-firebase/storage";
@@ -7,7 +6,6 @@ import {
   cloudTagToRecord,
   cloudWordToRecord,
   extensionForMimeType,
-  FIREBASE_CONFIG,
   recordingStoragePath,
   TAG_COLORS,
   userTagsPath,
@@ -42,9 +40,7 @@ export class FirebaseMobileSession {
   private readonly auth = auth();
   private readonly firestore = firestore();
 
-  constructor(private readonly queueDb: VocabDatabase) {
-    ensureFirebaseApp();
-  }
+  constructor(private readonly queueDb: VocabDatabase) {}
 
   getCurrentUser(): CloudUser | null {
     return mapUser(this.auth.currentUser);
@@ -99,9 +95,7 @@ export class FirebaseVocabularyRepository implements VocabularyRepositoryApi {
   private readonly firestore = firestore();
   private readonly storage = storage();
 
-  constructor(private readonly queueDb: VocabDatabase) {
-    ensureFirebaseApp();
-  }
+  constructor(private readonly queueDb: VocabDatabase) {}
 
   async listWords(filters: WordListFilters = {}): Promise<MobileWordRecord[]> {
     const uid = requireUid(this.auth.currentUser);
@@ -345,12 +339,6 @@ export class FirebaseVocabularyRepository implements VocabularyRepositoryApi {
       throw new Error("词条不存在");
     }
     return word;
-  }
-}
-
-function ensureFirebaseApp(): void {
-  if (firebase.apps.length === 0) {
-    firebase.initializeApp(FIREBASE_CONFIG);
   }
 }
 

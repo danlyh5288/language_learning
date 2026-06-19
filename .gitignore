@@ -6,6 +6,9 @@ release/
 build/icon.iconset/
 .npm-cache/
 .expo/
+.env
+.env.*
+!.env.example
 firebase-debug.log
 firestore-debug.log
 ui-debug.log
