@@ -167,7 +167,7 @@ class FirebaseCloudApi {
   async getStatus(): Promise<CloudSyncStatus> {
     const { auth } = await getRuntime();
     const user = mapUser(auth.currentUser);
-    const isEntitled = user ? await this.isUserEntitled(user.uid) : false;
+    const isEntitled = user?.emailVerified ? await this.isUserEntitled(user.uid) : false;
     return {
       mode: this.isCloudEnabled() ? "cloud" : "local",
       user,
@@ -175,7 +175,7 @@ class FirebaseCloudApi {
       isEnabled: this.isCloudEnabled(),
       isOnline: navigator.onLine,
       isSyncing: false,
-      pendingRecordingUploads: user ? await countQueuedRecordings(user.uid) : 0,
+      pendingRecordingUploads: user?.emailVerified ? await countQueuedRecordings(user.uid) : 0,
       lastSyncError: null
     };
   }
@@ -215,7 +215,9 @@ class FirebaseCloudApi {
     const { auth } = await getRuntime();
     if (auth.currentUser) {
       await auth.currentUser.reload();
-      await this.processRecordingQueue(auth.currentUser.uid);
+      if (auth.currentUser.emailVerified) {
+        await this.processRecordingQueue(auth.currentUser.uid);
+      }
     }
     return this.getStatus();
   }

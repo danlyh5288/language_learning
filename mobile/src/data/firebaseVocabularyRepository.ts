@@ -73,7 +73,7 @@ export class FirebaseMobileSession {
 
   async getStatus(isEnabled: boolean): Promise<CloudSyncStatus> {
     const user = this.getCurrentUser();
-    const isEntitled = user ? await this.isUserEntitled(user.uid) : false;
+    const isEntitled = user?.emailVerified ? await this.isUserEntitled(user.uid) : false;
     return {
       mode: isEnabled ? "cloud" : "local",
       user,
@@ -81,7 +81,7 @@ export class FirebaseMobileSession {
       isEnabled,
       isOnline: true,
       isSyncing: false,
-      pendingRecordingUploads: user ? await countQueuedRecordings(this.queueDb, user.uid) : 0,
+      pendingRecordingUploads: user?.emailVerified ? await countQueuedRecordings(this.queueDb, user.uid) : 0,
       lastSyncError: null
     };
   }
