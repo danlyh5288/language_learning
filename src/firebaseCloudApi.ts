@@ -88,20 +88,44 @@ export function createFirebaseAwareApi(localApi: VocabApi): VocabApi {
 
   return {
     words: {
-      list: (filters?: WordListFilters) => cloud.isCloudEnabled() ? cloud.listWords(filters) : localApi.words.list(filters),
-      create: (input: WordInput) => cloud.isCloudEnabled() ? cloud.createWord(input) : localApi.words.create(input),
-      update: (id: string, input: WordInput) => cloud.isCloudEnabled() ? cloud.updateWord(id, input) : localApi.words.update(id, input),
-      delete: (id: string) => cloud.isCloudEnabled() ? cloud.deleteWord(id) : localApi.words.delete(id)
+      list: (filters?: WordListFilters) => cloud.withCloudData(
+        () => cloud.listWords(filters),
+        () => localApi.words.list(filters)
+      ),
+      create: (input: WordInput) => cloud.withCloudData(
+        () => cloud.createWord(input),
+        () => localApi.words.create(input)
+      ),
+      update: (id: string, input: WordInput) => cloud.withCloudData(
+        () => cloud.updateWord(id, input),
+        () => localApi.words.update(id, input)
+      ),
+      delete: (id: string) => cloud.withCloudData(
+        () => cloud.deleteWord(id),
+        () => localApi.words.delete(id)
+      )
     },
     tags: {
-      list: () => cloud.isCloudEnabled() ? cloud.listTags() : localApi.tags.list(),
-      create: (name: string) => cloud.isCloudEnabled() ? cloud.createTag(name) : localApi.tags.create(name)
+      list: () => cloud.withCloudData(
+        () => cloud.listTags(),
+        () => localApi.tags.list()
+      ),
+      create: (name: string) => cloud.withCloudData(
+        () => cloud.createTag(name),
+        () => localApi.tags.create(name)
+      )
     },
     recordings: {
       saveForWord: (input: RecordingSaveInput) =>
-        cloud.isCloudEnabled() ? cloud.saveRecording(input) : localApi.recordings.saveForWord(input),
+        cloud.withCloudData(
+          () => cloud.saveRecording(input),
+          () => localApi.recordings.saveForWord(input)
+        ),
       getPlaybackUrl: (wordId: string) =>
-        cloud.isCloudEnabled() ? cloud.getPlaybackUrl(wordId) : localApi.recordings.getPlaybackUrl(wordId)
+        cloud.withCloudData(
+          () => cloud.getPlaybackUrl(wordId),
+          () => localApi.recordings.getPlaybackUrl(wordId)
+        )
     },
     auth: {
       getState: () => cloud.getAuthState(),
@@ -126,6 +150,13 @@ class FirebaseCloudApi {
     return localStorage.getItem(CLOUD_MODE_KEY) === "cloud";
   }
 
+  async withCloudData<T>(cloudAction: () => Promise<T>, localAction: () => Promise<T>): Promise<T> {
+    if (!(await this.canUseCloudData())) {
+      return localAction();
+    }
+    return cloudAction();
+  }
+
   async getAuthState(): Promise<AuthState> {
     const { auth } = await getRuntime();
     await ensureAuthPersistence(auth);
@@ -136,6 +167,7 @@ class FirebaseCloudApi {
     const { auth } = await getRuntime();
     await ensureAuthPersistence(auth);
     const credential = await signInWithEmailAndPassword(auth, input.email.trim(), input.password);
+    localStorage.setItem(CLOUD_MODE_KEY, "local");
     return { user: mapUser(credential.user) };
   }
 
@@ -144,6 +176,7 @@ class FirebaseCloudApi {
     await ensureAuthPersistence(auth);
     const credential = await createUserWithEmailAndPassword(auth, input.email.trim(), input.password);
     await sendEmailVerification(credential.user);
+    localStorage.setItem(CLOUD_MODE_KEY, "local");
     return { user: mapUser(credential.user) };
   }
 
@@ -167,12 +200,16 @@ class FirebaseCloudApi {
   async getStatus(): Promise<CloudSyncStatus> {
     const { auth } = await getRuntime();
     const user = mapUser(auth.currentUser);
+    const canUseCloud = this.isCloudEnabled() && Boolean(user?.emailVerified);
+    if (this.isCloudEnabled() && !canUseCloud) {
+      localStorage.setItem(CLOUD_MODE_KEY, "local");
+    }
     const isEntitled = user?.emailVerified ? await this.isUserEntitled(user.uid) : false;
     return {
-      mode: this.isCloudEnabled() ? "cloud" : "local",
+      mode: canUseCloud ? "cloud" : "local",
       user,
       isEntitled,
-      isEnabled: this.isCloudEnabled(),
+      isEnabled: canUseCloud,
       isOnline: navigator.onLine,
       isSyncing: false,
       pendingRecordingUploads: user?.emailVerified ? await countQueuedRecordings(user.uid) : 0,
@@ -220,6 +257,18 @@ class FirebaseCloudApi {
       }
     }
     return this.getStatus();
+  }
+
+  private async canUseCloudData(): Promise<boolean> {
+    if (!this.isCloudEnabled()) {
+      return false;
+    }
+    const { auth } = await getRuntime();
+    if (auth.currentUser?.emailVerified) {
+      return true;
+    }
+    localStorage.setItem(CLOUD_MODE_KEY, "local");
+    return false;
   }
 
   async listTags(): Promise<TagRecord[]> {

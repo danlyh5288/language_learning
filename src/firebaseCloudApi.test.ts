@@ -13,7 +13,8 @@ const firebaseMocks = vi.hoisted(() => {
 
   return {
     auth,
-    getDoc: vi.fn()
+    getDoc: vi.fn(),
+    getDocs: vi.fn()
   };
 });
 
@@ -36,7 +37,7 @@ vi.mock("firebase/firestore", () => ({
   deleteField: vi.fn(),
   doc: vi.fn(),
   getDoc: firebaseMocks.getDoc,
-  getDocs: vi.fn(),
+  getDocs: firebaseMocks.getDocs,
   initializeFirestore: vi.fn(() => ({})),
   persistentLocalCache: vi.fn(() => ({})),
   persistentSingleTabManager: vi.fn(() => ({})),
@@ -74,6 +75,7 @@ describe("Firebase cloud API", () => {
       reload: vi.fn(async () => undefined)
     };
     firebaseMocks.getDoc.mockClear();
+    firebaseMocks.getDocs.mockClear();
   });
 
   it("does not read entitlement status before email verification", async () => {
@@ -92,6 +94,19 @@ describe("Firebase cloud API", () => {
       lastSyncError: null
     });
     expect(firebaseMocks.getDoc).not.toHaveBeenCalled();
+  });
+
+  it("uses local vocabulary data when stale cloud mode belongs to an unverified user", async () => {
+    localStorage.setItem("pronunciation-vault-cloud-mode", "cloud");
+    const { createFirebaseAwareApi } = await import("./firebaseCloudApi");
+    const localApi = createLocalApi();
+    const api = createFirebaseAwareApi(localApi);
+
+    await expect(api.words.list()).resolves.toEqual([]);
+
+    expect(localApi.words.list).toHaveBeenCalledTimes(1);
+    expect(firebaseMocks.getDocs).not.toHaveBeenCalled();
+    expect(localStorage.getItem("pronunciation-vault-cloud-mode")).toBe("local");
   });
 });
 

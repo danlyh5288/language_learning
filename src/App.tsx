@@ -1064,6 +1064,9 @@ function errorMessage(caught: unknown): string {
   if (caught instanceof DOMException && caught.name === "NotAllowedError") {
     return "麦克风权限被拒绝";
   }
+  if (isFirestoreOfflineError(caught)) {
+    return "当前无法连接 Firebase，请检查网络后重试";
+  }
   if (caught instanceof Error) {
     return caught.message;
   }
@@ -1100,4 +1103,16 @@ function errorCode(caught: unknown): string | null {
     return typeof code === "string" ? code : null;
   }
   return null;
+}
+
+function isFirestoreOfflineError(caught: unknown): boolean {
+  if (typeof caught !== "object" || caught === null) {
+    return false;
+  }
+  const code = "code" in caught ? (caught as { code?: unknown }).code : null;
+  if (code === "unavailable") {
+    return true;
+  }
+  const message = caught instanceof Error ? caught.message : String((caught as { message?: unknown }).message ?? "");
+  return message.includes("client is offline");
 }
