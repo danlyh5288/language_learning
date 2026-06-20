@@ -10,13 +10,17 @@ service firebase.storage {
       return signedIn() && request.auth.uid == userId;
     }
 
+    function emailVerified() {
+      return signedIn() && request.auth.token.email_verified == true;
+    }
+
     function hasCloudSync(userId) {
       return firestore.exists(/databases/(default)/documents/users/$(userId)/entitlements/cloudSync) &&
         firestore.get(/databases/(default)/documents/users/$(userId)/entitlements/cloudSync).data.active == true;
     }
 
     match /recordings/{userId}/{wordId}/{fileName} {
-      allow read, write: if owns(userId) && hasCloudSync(userId);
+      allow read, write: if owns(userId) && emailVerified() && hasCloudSync(userId);
     }
   }
 }

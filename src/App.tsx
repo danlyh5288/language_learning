@@ -60,6 +60,8 @@ export default function App() {
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [isCloudBusy, setIsCloudBusy] = useState(false);
+  const [cloudMessage, setCloudMessage] = useState<string | null>(null);
+  const [cloudError, setCloudError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const listAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -70,8 +72,9 @@ export default function App() {
     }
     try {
       setCloudStatus(await api.cloudSync.getStatus());
+      setCloudError(null);
     } catch (caught) {
-      setError(errorMessage(caught));
+      setCloudError(cloudErrorMessage(caught));
     }
   }, []);
 
@@ -313,36 +316,56 @@ export default function App() {
   }
 
   async function signIn() {
-    if (!api.auth || !authEmail.trim() || !authPassword) {
+    if (!api.auth || !authEmail.trim() || authPassword.length < 6) {
       return;
     }
     setIsCloudBusy(true);
-    setError(null);
+    setCloudError(null);
+    setCloudMessage(null);
     try {
       await api.auth.signIn({ email: authEmail, password: authPassword });
       setAuthPassword("");
-      setMessage("已登录");
+      setCloudMessage("已登录");
       await loadCloudStatus();
     } catch (caught) {
-      setError(errorMessage(caught));
+      setCloudError(cloudErrorMessage(caught));
     } finally {
       setIsCloudBusy(false);
     }
   }
 
   async function signUp() {
-    if (!api.auth || !authEmail.trim() || !authPassword) {
+    if (!api.auth || !authEmail.trim() || authPassword.length < 6) {
       return;
     }
     setIsCloudBusy(true);
-    setError(null);
+    setCloudError(null);
+    setCloudMessage(null);
     try {
       await api.auth.signUp({ email: authEmail, password: authPassword });
       setAuthPassword("");
-      setMessage("账号已创建");
+      setCloudMessage("验证邮件已发送");
       await loadCloudStatus();
     } catch (caught) {
-      setError(errorMessage(caught));
+      setCloudError(cloudErrorMessage(caught));
+    } finally {
+      setIsCloudBusy(false);
+    }
+  }
+
+  async function sendVerificationEmail() {
+    if (!api.auth) {
+      return;
+    }
+    setIsCloudBusy(true);
+    setCloudError(null);
+    setCloudMessage(null);
+    try {
+      await api.auth.sendVerificationEmail();
+      setCloudMessage("验证邮件已重新发送");
+      await loadCloudStatus();
+    } catch (caught) {
+      setCloudError(cloudErrorMessage(caught));
     } finally {
       setIsCloudBusy(false);
     }
@@ -353,16 +376,17 @@ export default function App() {
       return;
     }
     setIsCloudBusy(true);
-    setError(null);
+    setCloudError(null);
+    setCloudMessage(null);
     try {
       await api.auth.signOut();
       setSelectedWord(null);
       setIsCreating(false);
       setDraft(emptyDraft);
-      setMessage("已退出云端账号");
+      setCloudMessage("已退出云端账号");
       await loadData();
     } catch (caught) {
-      setError(errorMessage(caught));
+      setCloudError(cloudErrorMessage(caught));
     } finally {
       setIsCloudBusy(false);
     }
@@ -373,16 +397,17 @@ export default function App() {
       return;
     }
     setIsCloudBusy(true);
-    setError(null);
+    setCloudError(null);
+    setCloudMessage(null);
     try {
       await api.cloudSync.enable();
       setSelectedWord(null);
       setIsCreating(false);
       setDraft(emptyDraft);
-      setMessage("已开启云同步");
+      setCloudMessage("已开启云同步");
       await loadData();
     } catch (caught) {
-      setError(errorMessage(caught));
+      setCloudError(cloudErrorMessage(caught));
     } finally {
       setIsCloudBusy(false);
     }
@@ -393,16 +418,17 @@ export default function App() {
       return;
     }
     setIsCloudBusy(true);
-    setError(null);
+    setCloudError(null);
+    setCloudMessage(null);
     try {
       await api.cloudSync.disable();
       setSelectedWord(null);
       setIsCreating(false);
       setDraft(emptyDraft);
-      setMessage("已切换到本地模式");
+      setCloudMessage("已切换到本地模式");
       await loadData();
     } catch (caught) {
-      setError(errorMessage(caught));
+      setCloudError(cloudErrorMessage(caught));
     } finally {
       setIsCloudBusy(false);
     }
@@ -413,13 +439,14 @@ export default function App() {
       return;
     }
     setIsCloudBusy(true);
-    setError(null);
+    setCloudError(null);
+    setCloudMessage(null);
     try {
       await api.cloudSync.refresh();
       await loadData();
-      setMessage("云同步已刷新");
+      setCloudMessage("云同步已刷新");
     } catch (caught) {
-      setError(errorMessage(caught));
+      setCloudError(cloudErrorMessage(caught));
     } finally {
       setIsCloudBusy(false);
     }
@@ -443,10 +470,13 @@ export default function App() {
           email={authEmail}
           password={authPassword}
           busy={isCloudBusy}
+          message={cloudMessage}
+          error={cloudError}
           onEmailChange={setAuthEmail}
           onPasswordChange={setAuthPassword}
           onSignIn={() => void signIn()}
           onSignUp={() => void signUp()}
+          onSendVerificationEmail={() => void sendVerificationEmail()}
           onSignOut={() => void signOut()}
           onEnable={() => void enableCloudSync()}
           onDisable={() => void disableCloudSync()}
@@ -681,10 +711,13 @@ type CloudPanelProps = {
   email: string;
   password: string;
   busy: boolean;
+  message: string | null;
+  error: string | null;
   onEmailChange: (email: string) => void;
   onPasswordChange: (password: string) => void;
   onSignIn: () => void;
   onSignUp: () => void;
+  onSendVerificationEmail: () => void;
   onSignOut: () => void;
   onEnable: () => void;
   onDisable: () => void;
@@ -696,10 +729,13 @@ function CloudPanel({
   email,
   password,
   busy,
+  message,
+  error,
   onEmailChange,
   onPasswordChange,
   onSignIn,
   onSignUp,
+  onSendVerificationEmail,
   onSignOut,
   onEnable,
   onDisable,
@@ -707,12 +743,18 @@ function CloudPanel({
 }: CloudPanelProps) {
   const signedIn = Boolean(status?.user);
   const canSubmitAuth = email.trim().length > 0 && password.length >= 6 && !busy;
+  const emailVerified = status?.user?.emailVerified ?? false;
+  const passwordTooShort = password.length > 0 && password.length < 6;
+  const authHelpText = passwordTooShort ? "密码至少 6 位" : "请输入邮箱和至少 6 位密码";
+  const canEnableCloud = !busy && Boolean(status?.isEntitled) && emailVerified;
   const statusLabel = status?.isEnabled
     ? status.pendingRecordingUploads > 0
       ? `云端模式 · ${status.pendingRecordingUploads} 个录音待上传`
       : "云端模式 · 已同步"
     : signedIn
-      ? status?.isEntitled
+      ? !emailVerified
+        ? "已登录 · 邮箱待验证"
+        : status?.isEntitled
         ? "已登录 · 可开启云同步"
         : "已登录 · 未开通订阅"
       : "本地模式";
@@ -731,6 +773,7 @@ function CloudPanel({
             type="email"
             value={email}
             placeholder="邮箱"
+            aria-describedby="cloud-auth-help"
             onChange={(event) => onEmailChange(event.target.value)}
           />
           <input
@@ -738,25 +781,37 @@ function CloudPanel({
             type="password"
             value={password}
             placeholder="密码"
+            aria-describedby="cloud-auth-help"
             onChange={(event) => onPasswordChange(event.target.value)}
           />
+          <p className="cloud-helper" id="cloud-auth-help">{authHelpText}</p>
           <div className="cloud-actions">
             <button type="button" disabled={!canSubmitAuth} onClick={onSignIn}>
               <LogIn size={14} />
               登录
             </button>
-            <button type="button" disabled={!canSubmitAuth} onClick={onSignUp}>注册</button>
+            <button type="button" disabled={!canSubmitAuth} onClick={onSignUp}>
+              <Plus size={14} />
+              注册
+            </button>
           </div>
         </div>
       ) : (
         <div className="cloud-account">
-          <span title={status?.user?.email ?? undefined}>{status?.user?.email ?? "已登录"}</span>
+          <div className="cloud-account-line">
+            <span className="cloud-email" title={status?.user?.email ?? undefined}>{status?.user?.email ?? "已登录"}</span>
+            {!emailVerified ? <span className="verify-pill">邮箱未验证</span> : null}
+          </div>
+          {!emailVerified ? <p className="cloud-helper">完成邮箱验证后刷新状态，再开启云同步。</p> : null}
           <div className="cloud-actions">
             {status?.isEnabled ? (
               <button type="button" disabled={busy} onClick={onDisable}>停用</button>
             ) : (
-              <button type="button" disabled={busy || !status?.isEntitled} onClick={onEnable}>开启</button>
+              <button type="button" disabled={!canEnableCloud} onClick={onEnable}>开启</button>
             )}
+            {!emailVerified ? (
+              <button type="button" disabled={busy} onClick={onSendVerificationEmail}>重发验证邮件</button>
+            ) : null}
             <button type="button" disabled={busy} aria-label="刷新云同步" onClick={onRefresh}>
               <RefreshCw size={14} />
             </button>
@@ -766,6 +821,8 @@ function CloudPanel({
           </div>
         </div>
       )}
+      {error ? <p className="cloud-feedback error" role="alert">{error}</p> : null}
+      {message && !error ? <p className="cloud-feedback ok" role="status"><Check size={14} />{message}</p> : null}
     </section>
   );
 }
@@ -1011,4 +1068,36 @@ function errorMessage(caught: unknown): string {
     return caught.message;
   }
   return "操作失败";
+}
+
+function cloudErrorMessage(caught: unknown): string {
+  const code = errorCode(caught);
+  switch (code) {
+    case "auth/email-already-in-use":
+      return "这个邮箱已注册，请直接登录";
+    case "auth/invalid-email":
+      return "邮箱格式不正确";
+    case "auth/invalid-credential":
+    case "auth/user-not-found":
+    case "auth/wrong-password":
+      return "邮箱或密码不正确";
+    case "auth/weak-password":
+      return "密码至少 6 位";
+    case "auth/too-many-requests":
+      return "尝试次数过多，请稍后再试";
+    case "auth/network-request-failed":
+      return "网络连接失败，请稍后重试";
+    case "auth/requires-recent-login":
+      return "请重新登录后再操作";
+    default:
+      return errorMessage(caught);
+  }
+}
+
+function errorCode(caught: unknown): string | null {
+  if (typeof caught === "object" && caught !== null && "code" in caught) {
+    const code = (caught as { code?: unknown }).code;
+    return typeof code === "string" ? code : null;
+  }
+  return null;
 }
