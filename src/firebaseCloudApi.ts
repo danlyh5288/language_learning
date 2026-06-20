@@ -3,6 +3,7 @@ import {
   browserLocalPersistence,
   createUserWithEmailAndPassword,
   getAuth,
+  sendEmailVerification,
   setPersistence,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
@@ -106,6 +107,7 @@ export function createFirebaseAwareApi(localApi: VocabApi): VocabApi {
       getState: () => cloud.getAuthState(),
       signIn: (input: AuthInput) => cloud.signIn(input),
       signUp: (input: AuthInput) => cloud.signUp(input),
+      sendVerificationEmail: () => cloud.sendVerificationEmail(),
       signOut: () => cloud.signOut()
     },
     cloudSync: {
@@ -141,7 +143,18 @@ class FirebaseCloudApi {
     const { auth } = await getRuntime();
     await ensureAuthPersistence(auth);
     const credential = await createUserWithEmailAndPassword(auth, input.email.trim(), input.password);
+    await sendEmailVerification(credential.user);
     return { user: mapUser(credential.user) };
+  }
+
+  async sendVerificationEmail(): Promise<AuthState> {
+    const { auth } = await getRuntime();
+    const user = auth.currentUser;
+    if (!user) {
+      throw new Error("请先登录后再发送验证邮件");
+    }
+    await sendEmailVerification(user);
+    return { user: mapUser(user) };
   }
 
   async signOut(): Promise<AuthState> {
@@ -173,6 +186,10 @@ class FirebaseCloudApi {
     if (!user) {
       throw new Error("请先登录后再开启云同步");
     }
+    await user.reload();
+    if (!user.emailVerified) {
+      throw new Error("请先验证邮箱后再开启云同步");
+    }
     if (!(await this.isUserEntitled(user.uid))) {
       throw new Error("当前账号尚未开通云同步订阅");
     }
@@ -197,6 +214,7 @@ class FirebaseCloudApi {
   async refresh(): Promise<CloudSyncStatus> {
     const { auth } = await getRuntime();
     if (auth.currentUser) {
+      await auth.currentUser.reload();
       await this.processRecordingQueue(auth.currentUser.uid);
     }
     return this.getStatus();
@@ -496,7 +514,7 @@ function ensureAuthPersistence(auth: Auth): Promise<void> {
 }
 
 function mapUser(user: User | null): CloudUser | null {
-  return user ? { uid: user.uid, email: user.email } : null;
+  return user ? { uid: user.uid, email: user.email, emailVerified: user.emailVerified } : null;
 }
 
 function requireUid(user: User | null): string {

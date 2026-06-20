@@ -7,7 +7,7 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment
 } from "@firebase/rules-unit-testing";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { ref, uploadString } from "firebase/storage";
 
 let testEnv: RulesTestEnvironment;
@@ -41,7 +41,7 @@ describe("Firebase security rules", () => {
   });
 
   it("allows entitled users to write their own cloud vocabulary", async () => {
-    const db = testEnv.authenticatedContext("user-1").firestore();
+    const db = testEnv.authenticatedContext("user-1", { email_verified: true }).firestore();
     await assertSucceeds(setDoc(doc(db, "users/user-1"), {
       libraryInitialized: true,
       updatedAt: "2026-06-18T10:00:00.000Z"
@@ -57,9 +57,24 @@ describe("Firebase security rules", () => {
     }));
   });
 
+  it("rejects unverified users even when they are entitled", async () => {
+    const db = testEnv.authenticatedContext("user-1", { email_verified: false }).firestore();
+
+    await assertFails(setDoc(doc(db, "users/user-1/words/word-1"), {
+      text: "侬好",
+      tagId: null,
+      toneNote: "开口轻一点",
+      recording: null,
+      createdAt: "2026-06-18T10:00:00.000Z",
+      updatedAt: "2026-06-18T10:00:00.000Z",
+      deletedAt: null
+    }));
+    await assertSucceeds(getDoc(doc(db, "users/user-1/entitlements/cloudSync")));
+  });
+
   it("rejects cross-user and unsubscribed writes", async () => {
-    const userOneDb = testEnv.authenticatedContext("user-1").firestore();
-    const userTwoDb = testEnv.authenticatedContext("user-2").firestore();
+    const userOneDb = testEnv.authenticatedContext("user-1", { email_verified: true }).firestore();
+    const userTwoDb = testEnv.authenticatedContext("user-2", { email_verified: true }).firestore();
 
     await assertFails(setDoc(doc(userOneDb, "users/user-2/words/word-1"), {
       text: "越权",
@@ -82,11 +97,16 @@ describe("Firebase security rules", () => {
   });
 
   it("protects recording storage by owner and entitlement", async () => {
-    const userOneStorage = testEnv.authenticatedContext("user-1").storage();
-    const userTwoStorage = testEnv.authenticatedContext("user-2").storage();
+    const userOneStorage = testEnv.authenticatedContext("user-1", { email_verified: true }).storage();
+    const unverifiedUserOneStorage = testEnv.authenticatedContext("user-1", { email_verified: false }).storage();
+    const userTwoStorage = testEnv.authenticatedContext("user-2", { email_verified: true }).storage();
 
     await assertSucceeds(uploadString(
       ref(userOneStorage, "recordings/user-1/word-1/recording-1.m4a"),
+      "audio"
+    ));
+    await assertFails(uploadString(
+      ref(unverifiedUserOneStorage, "recordings/user-1/word-1/recording-2.m4a"),
       "audio"
     ));
     await assertFails(uploadString(

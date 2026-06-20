@@ -53,7 +53,17 @@ export class FirebaseMobileSession {
 
   async signUp(input: AuthInput): Promise<AuthState> {
     const credential = await this.auth.createUserWithEmailAndPassword(input.email.trim(), input.password);
+    await credential.user.sendEmailVerification();
     return { user: mapUser(credential.user) };
+  }
+
+  async sendVerificationEmail(): Promise<AuthState> {
+    const user = this.auth.currentUser;
+    if (!user) {
+      throw new Error("请先登录后再发送验证邮件");
+    }
+    await user.sendEmailVerification();
+    return { user: mapUser(user) };
   }
 
   async signOut(): Promise<AuthState> {
@@ -342,8 +352,8 @@ export class FirebaseVocabularyRepository implements VocabularyRepositoryApi {
   }
 }
 
-function mapUser(user: { uid: string; email: string | null } | null): CloudUser | null {
-  return user ? { uid: user.uid, email: user.email } : null;
+function mapUser(user: { uid: string; email: string | null; emailVerified: boolean } | null): CloudUser | null {
+  return user ? { uid: user.uid, email: user.email, emailVerified: user.emailVerified } : null;
 }
 
 function requireUid(user: { uid: string } | null): string {

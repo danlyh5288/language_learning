@@ -74,6 +74,9 @@ function RepositoryBackedApp() {
           await firebaseSession.signUp({ email, password });
           setPassword("");
         })}
+        onSendVerificationEmail={() => void runCloudAction(async () => {
+          await firebaseSession.sendVerificationEmail();
+        })}
         onSignOut={() => void runCloudAction(async () => {
           await firebaseSession.signOut();
           setIsCloudEnabled(false);
@@ -82,6 +85,9 @@ function RepositoryBackedApp() {
           const user = firebaseSession.getCurrentUser();
           if (!user) {
             throw new Error("请先登录后再开启云同步");
+          }
+          if (!user.emailVerified) {
+            throw new Error("请先验证邮箱后再开启云同步");
           }
           if (!(await firebaseSession.isUserEntitled(user.uid))) {
             throw new Error("当前账号尚未开通云同步订阅");
@@ -106,6 +112,7 @@ type CloudControlsProps = {
   onPasswordChange: (password: string) => void;
   onSignIn: () => void;
   onSignUp: () => void;
+  onSendVerificationEmail: () => void;
   onSignOut: () => void;
   onEnable: () => void;
   onDisable: () => void;
@@ -121,17 +128,19 @@ function CloudControls({
   onPasswordChange,
   onSignIn,
   onSignUp,
+  onSendVerificationEmail,
   onSignOut,
   onEnable,
   onDisable
 }: CloudControlsProps) {
   const signedIn = Boolean(status?.user);
+  const emailVerified = status?.user?.emailVerified ?? false;
   const statusText = status?.isEnabled
     ? status.pendingRecordingUploads > 0
       ? `云端模式 · ${status.pendingRecordingUploads} 个录音待上传`
       : "云端模式"
     : signedIn
-      ? status?.isEntitled ? "已登录 · 可开启云同步" : "已登录 · 未开通订阅"
+      ? !emailVerified ? "已登录 · 邮箱待验证" : status?.isEntitled ? "已登录 · 可开启云同步" : "已登录 · 未开通订阅"
       : "本地移动模式";
 
   return (
@@ -142,12 +151,17 @@ function CloudControls({
           <Text style={styles.cloudEmail} numberOfLines={1}>{status?.user?.email ?? "已登录"}</Text>
           <Pressable
             accessibilityRole="button"
-            disabled={busy || (!status?.isEnabled && !status?.isEntitled)}
+            disabled={busy || (!status?.isEnabled && (!status?.isEntitled || !emailVerified))}
             style={[styles.cloudButton, busy ? styles.cloudButtonDisabled : null]}
             onPress={status?.isEnabled ? onDisable : onEnable}
           >
             <Text style={styles.cloudButtonText}>{status?.isEnabled ? "停用" : "开启"}</Text>
           </Pressable>
+          {!emailVerified ? (
+            <Pressable accessibilityRole="button" disabled={busy} style={styles.cloudButton} onPress={onSendVerificationEmail}>
+              <Text style={styles.cloudButtonText}>重发验证邮件</Text>
+            </Pressable>
+          ) : null}
           <Pressable accessibilityRole="button" disabled={busy} style={styles.cloudButton} onPress={onSignOut}>
             <Text style={styles.cloudButtonText}>退出</Text>
           </Pressable>

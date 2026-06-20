@@ -10,9 +10,17 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == userId;
     }
 
+    function emailVerified() {
+      return signedIn() && request.auth.token.email_verified == true;
+    }
+
     function hasCloudSync(userId) {
       return exists(/databases/$(database)/documents/users/$(userId)/entitlements/cloudSync) &&
         get(/databases/$(database)/documents/users/$(userId)/entitlements/cloudSync).data.active == true;
+    }
+
+    function canUseCloudSync(userId) {
+      return owns(userId) && emailVerified() && hasCloudSync(userId);
     }
 
     function userShellKeys() {
@@ -29,8 +37,7 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if owns(userId);
-      allow create, update: if owns(userId) &&
-        hasCloudSync(userId) &&
+      allow create, update: if canUseCloudSync(userId) &&
         request.resource.data.keys().hasOnly(userShellKeys());
       allow delete: if false;
 
@@ -40,8 +47,8 @@ service cloud.firestore {
       }
 
       match /tags/{tagId} {
-        allow read, create, update: if owns(userId) &&
-          hasCloudSync(userId) &&
+        allow read: if canUseCloudSync(userId);
+        allow create, update: if canUseCloudSync(userId) &&
           request.resource.data.keys().hasOnly(tagKeys()) &&
           request.resource.data.name is string &&
           request.resource.data.color is string;
@@ -49,8 +56,8 @@ service cloud.firestore {
       }
 
       match /words/{wordId} {
-        allow read, create, update: if owns(userId) &&
-          hasCloudSync(userId) &&
+        allow read: if canUseCloudSync(userId);
+        allow create, update: if canUseCloudSync(userId) &&
           request.resource.data.keys().hasOnly(wordKeys()) &&
           request.resource.data.text is string &&
           request.resource.data.toneNote is string;

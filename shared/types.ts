@@ -51,6 +51,7 @@ export type CloudMode = "local" | "cloud";
 export type CloudUser = {
   uid: string;
   email: string | null;
+  emailVerified: boolean;
 };
 
 export type AuthState = {
@@ -92,6 +93,7 @@ export type VocabApi = {
     getState(): Promise<AuthState>;
     signIn(input: AuthInput): Promise<AuthState>;
     signUp(input: AuthInput): Promise<AuthState>;
+    sendVerificationEmail(): Promise<AuthState>;
     signOut(): Promise<AuthState>;
   };
   cloudSync?: {

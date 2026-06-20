@@ -116,6 +116,7 @@ Firebase project files:
 - `functions/src/index.ts` contains Stripe entitlement webhook handling and old-recording cleanup.
 
 For desktop/Web builds, copy `.env.example` to `.env.local` and fill in the Firebase Web app config from Firebase Console. `.env.local` is ignored by Git.
+Enable the Email/Password sign-in provider in Firebase Auth and configure the verification email template. New email/password accounts receive a verification email after registration, and cloud sync can only be enabled after the email is verified and the account has an active cloud sync entitlement.
 
 For mobile builds, download the Firebase native app config files and place them locally:
 

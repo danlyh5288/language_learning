@@ -56,6 +56,7 @@ function createLazyFirebaseApi(localApi: VocabApi): VocabApi {
       getState: async () => (await getCloudApi()).auth?.getState() ?? { user: null },
       signIn: async (input) => (await getCloudApi()).auth?.signIn(input) ?? { user: null },
       signUp: async (input) => (await getCloudApi()).auth?.signUp(input) ?? { user: null },
+      sendVerificationEmail: async () => (await getCloudApi()).auth?.sendVerificationEmail() ?? { user: null },
       signOut: async () => (await getCloudApi()).auth?.signOut() ?? { user: null }
     },
     cloudSync: {
