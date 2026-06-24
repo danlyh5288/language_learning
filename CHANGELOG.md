@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.1.3 - 2026-06-24
+
+### Fixed
+
+- Let Firebase login and registration complete even when cloud activation fails.
+- Show clearer setup guidance when Firestore or cloud rules are not ready.
+
+### Changed
+
+- Bump the macOS DMG package version to `0.1.3`.
+
 ## 0.1.2 - 2026-06-24
 
 ### Added
