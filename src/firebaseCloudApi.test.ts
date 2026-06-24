@@ -135,7 +135,7 @@ describe("Firebase cloud API", () => {
     expect(localStorage.getItem("pronunciation-vault-cloud-mode")).toBe("cloud");
   });
 
-  it("signs in and automatically enables cloud mode without entitlement", async () => {
+  it("signs in without blocking on cloud activation", async () => {
     const { createFirebaseAwareApi } = await import("./firebaseCloudApi");
     const localApi = createLocalApi();
     const api = createFirebaseAwareApi(localApi);
@@ -153,6 +153,26 @@ describe("Firebase cloud API", () => {
       "learner@example.com",
       "123456"
     );
+    expect(firebaseMocks.getDoc).not.toHaveBeenCalled();
+    expect(firebaseMocks.setDoc).not.toHaveBeenCalled();
+    expect(localStorage.getItem("pronunciation-vault-cloud-mode")).toBe("local");
+  });
+
+  it("enables cloud mode without entitlement when requested after auth", async () => {
+    const { createFirebaseAwareApi } = await import("./firebaseCloudApi");
+    const localApi = createLocalApi();
+    const api = createFirebaseAwareApi(localApi);
+
+    await expect(api.cloudSync?.enable()).resolves.toMatchObject({
+      mode: "cloud",
+      user: {
+        uid: "user-1",
+        email: "learner@example.com",
+        emailVerified: false
+      },
+      isEnabled: true
+    });
+
     expect(firebaseMocks.getDoc).toHaveBeenCalled();
     expect(firebaseMocks.setDoc).toHaveBeenCalled();
     expect(localStorage.getItem("pronunciation-vault-cloud-mode")).toBe("cloud");
