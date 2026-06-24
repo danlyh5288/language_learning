@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.1.4 - 2026-06-24
+
+### Fixed
+
+- Import local recordings through desktop IPC during first cloud sync instead of fetching the local playback URL.
+- Keep cloud activation moving when one local recording cannot be read.
+
+### Changed
+
+- Bump the macOS DMG package version to `0.1.4`.
+
 ## 0.1.3 - 2026-06-24
 
 ### Fixed

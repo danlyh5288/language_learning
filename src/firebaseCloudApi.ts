@@ -126,7 +126,8 @@ export function createFirebaseAwareApi(localApi: VocabApi): VocabApi {
         cloud.withCloudData(
           () => cloud.getPlaybackUrl(wordId),
           () => localApi.recordings.getPlaybackUrl(wordId)
-        )
+        ),
+      readForWord: (wordId: string) => localApi.recordings.readForWord?.(wordId) ?? Promise.resolve(null)
     },
     auth: {
       getState: () => cloud.getAuthState(),
@@ -474,18 +475,15 @@ class FirebaseCloudApi {
         deletedAt: null
       };
       if (word.hasRecording) {
-        const playbackUrl = await this.localApi.recordings.getPlaybackUrl(word.id);
-        if (playbackUrl) {
-          const response = await fetch(playbackUrl);
-          const blob = await response.blob();
-          const mimeType = blob.type || "audio/webm";
+        const recording = await this.readLocalRecording(word.id);
+        if (recording) {
           const uploadId = createId();
-          const storagePath = recordingStoragePath(uid, word.id, uploadId, extensionForMimeType(mimeType));
+          const storagePath = recordingStoragePath(uid, word.id, uploadId, extensionForMimeType(recording.mimeType));
           try {
-            await uploadBytes(ref(storage, storagePath), blob, { contentType: mimeType });
+            await uploadBytes(ref(storage, storagePath), recording.blob, { contentType: recording.mimeType });
             wordDoc.recording = {
               storagePath,
-              mimeType,
+              mimeType: recording.mimeType,
               durationMs: word.audioDurationMs ?? 0,
               uploadedAt: new Date().toISOString()
             };
@@ -493,8 +491,8 @@ class FirebaseCloudApi {
             await putQueuedRecording(uid, {
               id: `${uid}-${word.id}-${uploadId}`,
               wordId: word.id,
-              blob,
-              mimeType,
+              blob: recording.blob,
+              mimeType: recording.mimeType,
               durationMs: word.audioDurationMs ?? 0,
               storagePath,
               createdAt: now,
@@ -506,6 +504,46 @@ class FirebaseCloudApi {
       }
       await setDoc(doc(db, userWordsPath(uid), word.id), wordDoc);
     }));
+  }
+
+  private async readLocalRecording(wordId: string): Promise<{ blob: Blob; mimeType: string } | null> {
+    const directRead = this.localApi.recordings.readForWord;
+    if (directRead) {
+      try {
+        const data = await directRead(wordId);
+        if (!data) {
+          return null;
+        }
+        const mimeType = data.mimeType || "audio/webm";
+        return {
+          blob: new Blob([data.audioBuffer], { type: mimeType }),
+          mimeType
+        };
+      } catch (caught) {
+        console.warn("Failed to read local recording for cloud import", { wordId, error: errorMessage(caught) });
+        return null;
+      }
+    }
+
+    const playbackUrl = await this.localApi.recordings.getPlaybackUrl(wordId);
+    if (!playbackUrl) {
+      return null;
+    }
+
+    try {
+      const response = await fetch(playbackUrl);
+      if (!response.ok) {
+        return null;
+      }
+      const blob = await response.blob();
+      return {
+        blob,
+        mimeType: blob.type || "audio/webm"
+      };
+    } catch (caught) {
+      console.warn("Failed to fetch local recording for cloud import", { wordId, error: errorMessage(caught) });
+      return null;
+    }
   }
 
   private async requireWord(id: string): Promise<WordRecord> {
