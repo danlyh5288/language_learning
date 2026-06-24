@@ -14,7 +14,8 @@ const api: VocabApi = {
   },
   recordings: {
     saveForWord: (input: RecordingSaveInput) => ipcRenderer.invoke("recordings:saveForWord", input),
-    getPlaybackUrl: (wordId: string) => ipcRenderer.invoke("recordings:getPlaybackUrl", wordId)
+    getPlaybackUrl: (wordId: string) => ipcRenderer.invoke("recordings:getPlaybackUrl", wordId),
+    readForWord: (wordId: string) => ipcRenderer.invoke("recordings:readForWord", wordId)
   }
 };
 

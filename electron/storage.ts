@@ -4,6 +4,7 @@ import path from "node:path";
 import initSqlJs from "sql.js";
 import type { Database, SqlJsStatic } from "sql.js";
 import {
+  type RecordingReadResult,
   type RecordingSaveInput,
   type TagRecord,
   UNTAGGED_FILTER_ID,
@@ -242,6 +243,20 @@ export class VocabularyStore {
     return `recording://local/${encodeURIComponent(wordId)}?v=${encodeURIComponent(word.updatedAt)}`;
   }
 
+  readRecording(wordId: string): RecordingReadResult | null {
+    const row = this.getWordStorageRow(wordId);
+    if (!row?.audio_path || typeof row.audio_path !== "string" || !fs.existsSync(row.audio_path)) {
+      return null;
+    }
+
+    const audioBuffer = fs.readFileSync(row.audio_path);
+    const mimeType = typeof row.audio_mime === "string" && row.audio_mime ? row.audio_mime : mimeTypeForPath(row.audio_path);
+    return {
+      audioBuffer: audioBuffer.buffer.slice(audioBuffer.byteOffset, audioBuffer.byteOffset + audioBuffer.byteLength),
+      mimeType
+    };
+  }
+
   private migrate(): void {
     this.db.run("PRAGMA foreign_keys = ON");
     this.db.run(`
@@ -323,7 +338,7 @@ export class VocabularyStore {
   }
 
   private getWordStorageRow(id: string): SqlRow | null {
-    return this.select("SELECT id, audio_path FROM words WHERE id = ?", [id])[0] ?? null;
+    return this.select("SELECT id, audio_path, audio_mime FROM words WHERE id = ?", [id])[0] ?? null;
   }
 
   private removeRecordingFile(filePath: SqlValue): void {
@@ -380,6 +395,23 @@ function extensionForMime(mimeType: string): string {
     return "wav";
   }
   return "audio";
+}
+
+function mimeTypeForPath(filePath: string): string {
+  const extension = path.extname(filePath).toLowerCase();
+  if (extension === ".webm") {
+    return "audio/webm";
+  }
+  if (extension === ".ogg") {
+    return "audio/ogg";
+  }
+  if (extension === ".m4a" || extension === ".mp4") {
+    return "audio/mp4";
+  }
+  if (extension === ".wav") {
+    return "audio/wav";
+  }
+  return "application/octet-stream";
 }
 
 function mapWordRow(row: SqlRow): WordRecord {

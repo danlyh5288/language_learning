@@ -23,7 +23,8 @@ const firebaseMocks = vi.hoisted(() => {
     sendEmailVerification: vi.fn(async () => undefined),
     setDoc: vi.fn(async () => undefined),
     signInWithEmailAndPassword: vi.fn(),
-    signOut: vi.fn(async () => undefined)
+    signOut: vi.fn(async () => undefined),
+    uploadBytes: vi.fn(async () => undefined)
   };
 });
 
@@ -59,8 +60,8 @@ vi.mock("firebase/firestore", () => ({
 vi.mock("firebase/storage", () => ({
   getDownloadURL: vi.fn(),
   getStorage: vi.fn(() => ({})),
-  ref: vi.fn(),
-  uploadBytes: vi.fn()
+  ref: vi.fn((_storage, path: string) => ({ path })),
+  uploadBytes: firebaseMocks.uploadBytes
 }));
 
 vi.mock("./firebaseConfig", () => ({
@@ -102,6 +103,7 @@ describe("Firebase cloud API", () => {
     firebaseMocks.signInWithEmailAndPassword.mockReset();
     firebaseMocks.signInWithEmailAndPassword.mockResolvedValue({ user: firebaseMocks.auth.currentUser });
     firebaseMocks.signOut.mockClear();
+    firebaseMocks.uploadBytes.mockClear();
   });
 
   it("treats a signed-in unverified user as cloud-capable", async () => {
@@ -178,6 +180,74 @@ describe("Firebase cloud API", () => {
     expect(localStorage.getItem("pronunciation-vault-cloud-mode")).toBe("cloud");
   });
 
+  it("imports local recordings through the typed desktop read API", async () => {
+    const { createFirebaseAwareApi } = await import("./firebaseCloudApi");
+    const localApi = createLocalApi({
+      words: [{
+        id: "word-1",
+        text: "侬好",
+        tagId: null,
+        tagName: null,
+        tagColor: null,
+        toneNote: "",
+        audioDurationMs: 1200,
+        hasRecording: true,
+        createdAt: "2026-06-24T00:00:00.000Z",
+        updatedAt: "2026-06-24T00:00:00.000Z"
+      }],
+      recordingData: {
+        audioBuffer: new Uint8Array([1, 2, 3]).buffer,
+        mimeType: "audio/webm"
+      }
+    });
+    const api = createFirebaseAwareApi(localApi);
+
+    await expect(api.cloudSync?.enable()).resolves.toMatchObject({ mode: "cloud", isEnabled: true });
+
+    expect(localApi.recordings.readForWord).toHaveBeenCalledWith("word-1");
+    expect(localApi.recordings.getPlaybackUrl).not.toHaveBeenCalled();
+    expect(firebaseMocks.uploadBytes).toHaveBeenCalledTimes(1);
+    expect(firebaseMocks.setDoc).toHaveBeenCalledWith(
+      { path: "users/user-1/words/word-1" },
+      expect.objectContaining({
+        recording: expect.objectContaining({
+          storagePath: expect.stringContaining("recordings/user-1/word-1/"),
+          mimeType: "audio/webm",
+          durationMs: 1200
+        })
+      })
+    );
+  });
+
+  it("does not fail cloud activation when a local recording cannot be read", async () => {
+    const { createFirebaseAwareApi } = await import("./firebaseCloudApi");
+    const localApi = createLocalApi({
+      words: [{
+        id: "word-1",
+        text: "侬好",
+        tagId: null,
+        tagName: null,
+        tagColor: null,
+        toneNote: "",
+        audioDurationMs: 1200,
+        hasRecording: true,
+        createdAt: "2026-06-24T00:00:00.000Z",
+        updatedAt: "2026-06-24T00:00:00.000Z"
+      }],
+      recordingReadError: new TypeError("Failed to fetch")
+    });
+    const api = createFirebaseAwareApi(localApi);
+
+    await expect(api.cloudSync?.enable()).resolves.toMatchObject({ mode: "cloud", isEnabled: true });
+
+    expect(firebaseMocks.uploadBytes).not.toHaveBeenCalled();
+    expect(firebaseMocks.setDoc).toHaveBeenCalledWith(
+      { path: "users/user-1/words/word-1" },
+      expect.objectContaining({ recording: null })
+    );
+    expect(localStorage.getItem("pronunciation-vault-cloud-mode")).toBe("cloud");
+  });
+
   it("subscribes to cloud tag and word snapshots", async () => {
     localStorage.setItem("pronunciation-vault-cloud-mode", "cloud");
     const { createFirebaseAwareApi } = await import("./firebaseCloudApi");
@@ -219,10 +289,14 @@ describe("Firebase cloud API", () => {
   });
 });
 
-function createLocalApi(): VocabApi {
+function createLocalApi(options: {
+  words?: Awaited<ReturnType<VocabApi["words"]["list"]>>;
+  recordingData?: Awaited<ReturnType<NonNullable<VocabApi["recordings"]["readForWord"]>>>;
+  recordingReadError?: Error;
+} = {}): VocabApi {
   return {
     words: {
-      list: vi.fn(async () => []),
+      list: vi.fn(async () => options.words ?? []),
       create: vi.fn(),
       update: vi.fn(),
       delete: vi.fn()
@@ -233,7 +307,13 @@ function createLocalApi(): VocabApi {
     },
     recordings: {
       saveForWord: vi.fn(),
-      getPlaybackUrl: vi.fn(async () => null)
+      getPlaybackUrl: vi.fn(async () => null),
+      readForWord: vi.fn(async () => {
+        if (options.recordingReadError) {
+          throw options.recordingReadError;
+        }
+        return options.recordingData ?? null;
+      })
     }
   };
 }

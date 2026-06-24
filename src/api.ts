@@ -50,7 +50,8 @@ function createLazyFirebaseApi(localApi: VocabApi): VocabApi {
       saveForWord: async (input: RecordingSaveInput) =>
         shouldUseCloud() ? (await getCloudApi()).recordings.saveForWord(input) : localApi.recordings.saveForWord(input),
       getPlaybackUrl: async (wordId: string) =>
-        shouldUseCloud() ? (await getCloudApi()).recordings.getPlaybackUrl(wordId) : localApi.recordings.getPlaybackUrl(wordId)
+        shouldUseCloud() ? (await getCloudApi()).recordings.getPlaybackUrl(wordId) : localApi.recordings.getPlaybackUrl(wordId),
+      readForWord: async (wordId: string) => localApi.recordings.readForWord?.(wordId) ?? null
     },
     auth: {
       getState: async () => (await getCloudApi()).auth?.getState() ?? { user: null },
@@ -179,7 +180,19 @@ function createPreviewApi(): VocabApi {
         savePreviewState(state);
         return word;
       },
-      getPlaybackUrl: async (wordId: string) => previewRecordingUrls.get(wordId) ?? null
+      getPlaybackUrl: async (wordId: string) => previewRecordingUrls.get(wordId) ?? null,
+      readForWord: async (wordId: string) => {
+        const url = previewRecordingUrls.get(wordId);
+        if (!url) {
+          return null;
+        }
+        const response = await fetch(url);
+        const blob = await response.blob();
+        return {
+          audioBuffer: await blob.arrayBuffer(),
+          mimeType: blob.type || "audio/webm"
+        };
+      }
     }
   };
 }

@@ -94,6 +94,7 @@ function setupIpc(vocabularyStore: VocabularyStore): void {
 
   ipcMain.handle("recordings:saveForWord", (_event, input: RecordingSaveInput) => vocabularyStore.saveRecording(input));
   ipcMain.handle("recordings:getPlaybackUrl", (_event, wordId: string) => vocabularyStore.getPlaybackUrl(wordId));
+  ipcMain.handle("recordings:readForWord", (_event, wordId: string) => vocabularyStore.readRecording(wordId));
 }
 
 app.whenReady().then(async () => {

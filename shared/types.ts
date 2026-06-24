@@ -42,6 +42,11 @@ export type RecordingSaveInput = {
   durationMs: number;
 };
 
+export type RecordingReadResult = {
+  audioBuffer: ArrayBuffer;
+  mimeType: string;
+};
+
 export type SyncSource = "local" | "cloud";
 
 export type RecordingUploadStatus = "local" | "queued" | "uploading" | "uploaded" | "failed";
@@ -92,6 +97,7 @@ export type VocabApi = {
   recordings: {
     saveForWord(input: RecordingSaveInput): Promise<WordRecord>;
     getPlaybackUrl(wordId: string): Promise<string | null>;
+    readForWord?(wordId: string): Promise<RecordingReadResult | null>;
   };
   auth?: {
     getState(): Promise<AuthState>;
