@@ -101,20 +101,20 @@ describe("Cloud auth panel", () => {
     mockApi.signIn.mockReset();
     mockApi.signIn.mockImplementation(async () => {
       Object.assign(mockApi.status, {
-        mode: "cloud",
+        mode: "local",
         user: mockApi.signedInUser,
         isEntitled: true,
-        isEnabled: true
+        isEnabled: false
       } satisfies Partial<CloudSyncStatus>);
       return { user: mockApi.signedInUser };
     });
     mockApi.signUp.mockReset();
     mockApi.signUp.mockImplementation(async () => {
       Object.assign(mockApi.status, {
-        mode: "cloud",
+        mode: "local",
         user: mockApi.signedInUser,
         isEntitled: true,
-        isEnabled: true
+        isEnabled: false
       } satisfies Partial<CloudSyncStatus>);
       return { user: mockApi.signedInUser };
     });
@@ -122,7 +122,16 @@ describe("Cloud auth panel", () => {
     mockApi.signOut.mockClear();
     mockApi.getStatus.mockReset();
     mockApi.getStatus.mockResolvedValue(mockApi.status);
-    mockApi.enable.mockClear();
+    mockApi.enable.mockReset();
+    mockApi.enable.mockImplementation(async () => {
+      Object.assign(mockApi.status, {
+        mode: "cloud",
+        user: mockApi.signedInUser,
+        isEntitled: true,
+        isEnabled: true
+      } satisfies Partial<CloudSyncStatus>);
+      return mockApi.status;
+    });
     mockApi.disable.mockClear();
     mockApi.refresh.mockClear();
     mockApi.cloudListener = null;
@@ -189,6 +198,27 @@ describe("Cloud auth panel", () => {
     await user.click(within(modal).getByRole("button", { name: "注册" }));
 
     expect(await within(modal).findByRole("alert")).toHaveTextContent("这个邮箱已注册，请直接登录");
+  });
+
+  it("keeps the user signed in when cloud activation fails after login", async () => {
+    const user = userEvent.setup();
+    mockApi.enable.mockRejectedValueOnce({ code: "unavailable" });
+
+    render(<App />);
+
+    const account = await screen.findByRole("region", { name: "账户" });
+    await user.click(within(account).getByRole("button", { name: "登录" }));
+
+    const modal = await screen.findByRole("dialog", { name: "登录" });
+    await user.type(within(modal).getByLabelText("云同步邮箱"), "learner@example.com");
+    await user.type(within(modal).getByLabelText("云同步密码"), "123456");
+    await user.click(within(modal).getByRole("button", { name: "登录" }));
+
+    expect(await within(account).findByText("learner@example.com")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "登录" })).not.toBeInTheDocument();
+    expect(mockApi.enable).toHaveBeenCalledTimes(1);
+    expect(await within(account).findByRole("alert")).toHaveTextContent("已登录，但暂时无法开启云同步");
+    expect(within(account).getByRole("button", { name: "开启" })).toBeEnabled();
   });
 
   it("keeps passive cloud status failures out of the account dock after sign-in", async () => {

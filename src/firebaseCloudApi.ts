@@ -168,7 +168,7 @@ class FirebaseCloudApi {
     const { auth } = await getRuntime();
     await ensureAuthPersistence(auth);
     const credential = await signInWithEmailAndPassword(auth, input.email.trim(), input.password);
-    await this.activateCloudSync(credential.user.uid);
+    localStorage.setItem(CLOUD_MODE_KEY, "local");
     return { user: mapUser(credential.user) };
   }
 
@@ -177,7 +177,7 @@ class FirebaseCloudApi {
     await ensureAuthPersistence(auth);
     const credential = await createUserWithEmailAndPassword(auth, input.email.trim(), input.password);
     await sendEmailVerification(credential.user).catch(() => undefined);
-    await this.activateCloudSync(credential.user.uid);
+    localStorage.setItem(CLOUD_MODE_KEY, "local");
     return { user: mapUser(credential.user) };
   }
 

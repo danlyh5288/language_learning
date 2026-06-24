@@ -381,24 +381,28 @@ export default function App() {
     if (!api.auth || !authEmail.trim() || authPassword.length < 6) {
       return;
     }
+    let authSucceeded = false;
     setIsCloudBusy(true);
     setCloudError(null);
     setCloudMessage(null);
     try {
       const authState = await api.auth.signIn({ email: authEmail, password: authPassword });
-      setCloudStatus((current) => cloudStatusFromAuthState(authState, current, true));
+      authSucceeded = true;
+      setCloudStatus((current) => cloudStatusFromAuthState(authState, current));
       setAuthPassword("");
       setAuthMode(null);
       setSelectedWord(null);
       setIsCreating(false);
       setDraft(emptyDraft);
-      setCloudMessage("已登录并开启云同步");
-      await loadCloudStatus({ authState, assumeCloudEnabled: true });
-      await loadData();
+      setCloudMessage("已登录，正在开启云同步");
+      setIsCloudBusy(false);
+      void activateCloudSyncAfterAuth(authState, "已登录并开启云同步");
     } catch (caught) {
       setCloudError(cloudErrorMessage(caught));
     } finally {
-      setIsCloudBusy(false);
+      if (!authSucceeded) {
+        setIsCloudBusy(false);
+      }
     }
   }
 
@@ -406,22 +410,52 @@ export default function App() {
     if (!api.auth || !authEmail.trim() || authPassword.length < 6) {
       return;
     }
+    let authSucceeded = false;
     setIsCloudBusy(true);
     setCloudError(null);
     setCloudMessage(null);
     try {
       const authState = await api.auth.signUp({ email: authEmail, password: authPassword });
-      setCloudStatus((current) => cloudStatusFromAuthState(authState, current, true));
+      authSucceeded = true;
+      setCloudStatus((current) => cloudStatusFromAuthState(authState, current));
       setAuthPassword("");
       setAuthMode(null);
       setSelectedWord(null);
       setIsCreating(false);
       setDraft(emptyDraft);
-      setCloudMessage("已注册并开启云同步");
+      setCloudMessage("已注册，正在开启云同步");
+      setIsCloudBusy(false);
+      void activateCloudSyncAfterAuth(authState, "已注册并开启云同步");
+    } catch (caught) {
+      setCloudError(cloudErrorMessage(caught));
+    } finally {
+      if (!authSucceeded) {
+        setIsCloudBusy(false);
+      }
+    }
+  }
+
+  async function activateCloudSyncAfterAuth(authState: AuthState, successMessage: string) {
+    if (!api.cloudSync || !authState.user) {
+      await loadCloudStatus({ authState });
+      await loadData();
+      return;
+    }
+
+    setIsCloudBusy(true);
+    setCloudError(null);
+    try {
+      await api.cloudSync.enable();
+      setCloudStatus((current) => cloudStatusFromAuthState(authState, current, true));
+      setCloudMessage(successMessage);
       await loadCloudStatus({ authState, assumeCloudEnabled: true });
       await loadData();
     } catch (caught) {
-      setCloudError(cloudErrorMessage(caught));
+      const activationError = cloudActivationErrorMessage(caught);
+      setCloudMessage("已登录，本地模式可继续使用");
+      await loadCloudStatus({ authState });
+      await loadData();
+      setCloudError(activationError);
     } finally {
       setIsCloudBusy(false);
     }
@@ -1290,6 +1324,17 @@ function cloudErrorMessage(caught: unknown): string {
     default:
       return errorMessage(caught);
   }
+}
+
+function cloudActivationErrorMessage(caught: unknown): string {
+  const code = errorCode(caught);
+  if (isFirestoreOfflineError(caught) || code === "not-found" || code === "failed-precondition") {
+    return "已登录，但暂时无法开启云同步。请确认 Firebase 项目已创建 Firestore 默认数据库，并已部署 Firestore/Storage 规则。";
+  }
+  if (code === "permission-denied") {
+    return "已登录，但云同步权限被拒绝。请确认 Firestore/Storage 规则已部署到当前 Firebase 项目。";
+  }
+  return `已登录，但暂时无法开启云同步：${errorMessage(caught)}`;
 }
 
 function errorCode(caught: unknown): string | null {
