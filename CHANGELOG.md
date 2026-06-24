@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.1.2 - 2026-06-24
+
+### Added
+
+- Add login-triggered realtime cloud sync for desktop and mobile.
+- Add cloud change subscriptions for desktop Firestore snapshots and mobile repositories.
+
+### Changed
+
+- Enable cloud sync after login without requiring a subscription or verified email.
+- Bump the macOS DMG package version to `0.1.2`.
+
+### Security
+
+- Protect cloud vocabulary documents and recording storage by authenticated owner instead of paid entitlement.
+
 ## 0.1.1 - 2026-06-20
 
 ### Added

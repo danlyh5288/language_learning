@@ -1,10 +1,11 @@
 import { Alert } from "react-native";
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { UNTAGGED_FILTER_ID, type TagRecord, type WordInput, type WordListFilters } from "../../../shared/types";
 import type {
   DeletedWordResult,
   MobileWordRecord,
   RecordingFileStore,
+  RepositoryChangeListener,
   RecordingReplacementResult,
   SavedRecordingInput,
   VocabularyRepositoryApi
@@ -21,6 +22,7 @@ function createFileStore(): RecordingFileStore {
 class FakeRepository implements VocabularyRepositoryApi {
   tags: TagRecord[];
   words: MobileWordRecord[];
+  private listeners = new Set<RepositoryChangeListener>();
   private nextId = 1;
 
   constructor(seed?: { tags?: TagRecord[]; words?: MobileWordRecord[] }) {
@@ -131,6 +133,17 @@ class FakeRepository implements VocabularyRepositoryApi {
     return { word: this.decorateWord(word), oldRecordingUri };
   }
 
+  subscribe(listener: RepositoryChangeListener) {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  emitChange() {
+    this.listeners.forEach((listener) => listener());
+  }
+
   private withFreshTags(): MobileWordRecord[] {
     return this.words.map((word) => this.decorateWord(word));
   }
@@ -183,6 +196,20 @@ describe("VocabularyScreen", () => {
     expect(await view.findByText("1 个词条")).toBeTruthy();
     expect(view.getByText("辰光")).toBeTruthy();
     expect(view.queryByText("侬好")).toBeNull();
+  });
+
+  it("reloads words when the repository emits a change", async () => {
+    const repository = new FakeRepository();
+    const view = await render(<VocabularyScreen repository={repository} recordingFiles={createFileStore()} />);
+
+    expect(await view.findByText("暂无匹配词条")).toBeTruthy();
+
+    repository.words.push(seedWord({ id: "word-remote", text: "远端词" }));
+    await act(async () => {
+      repository.emitChange();
+    });
+
+    expect(await view.findByText("远端词")).toBeTruthy();
   });
 
   it("creates a word with a new tag and filters with #tag search", async () => {

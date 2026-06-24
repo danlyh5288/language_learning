@@ -68,10 +68,14 @@ function RepositoryBackedApp() {
         onPasswordChange={setPassword}
         onSignIn={() => void runCloudAction(async () => {
           await firebaseSession.signIn({ email, password });
+          await firebaseRepository.importLocalLibrary(localRepository);
+          setIsCloudEnabled(true);
           setPassword("");
         })}
         onSignUp={() => void runCloudAction(async () => {
           await firebaseSession.signUp({ email, password });
+          await firebaseRepository.importLocalLibrary(localRepository);
+          setIsCloudEnabled(true);
           setPassword("");
         })}
         onSendVerificationEmail={() => void runCloudAction(async () => {
@@ -85,12 +89,6 @@ function RepositoryBackedApp() {
           const user = firebaseSession.getCurrentUser();
           if (!user) {
             throw new Error("请先登录后再开启云同步");
-          }
-          if (!user.emailVerified) {
-            throw new Error("请先验证邮箱后再开启云同步");
-          }
-          if (!(await firebaseSession.isUserEntitled(user.uid))) {
-            throw new Error("当前账号尚未开通云同步订阅");
           }
           await firebaseRepository.importLocalLibrary(localRepository);
           setIsCloudEnabled(true);
@@ -140,7 +138,7 @@ function CloudControls({
       ? `云端模式 · ${status.pendingRecordingUploads} 个录音待上传`
       : "云端模式"
     : signedIn
-      ? !emailVerified ? "已登录 · 邮箱待验证" : status?.isEntitled ? "已登录 · 可开启云同步" : "已登录 · 未开通订阅"
+      ? "已登录 · 云同步已停用"
       : "本地移动模式";
 
   return (
@@ -151,7 +149,7 @@ function CloudControls({
           <Text style={styles.cloudEmail} numberOfLines={1}>{status?.user?.email ?? "已登录"}</Text>
           <Pressable
             accessibilityRole="button"
-            disabled={busy || (!status?.isEnabled && (!status?.isEntitled || !emailVerified))}
+            disabled={busy}
             style={[styles.cloudButton, busy ? styles.cloudButtonDisabled : null]}
             onPress={status?.isEnabled ? onDisable : onEnable}
           >

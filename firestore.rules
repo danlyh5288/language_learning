@@ -10,17 +10,8 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == userId;
     }
 
-    function emailVerified() {
-      return signedIn() && request.auth.token.email_verified == true;
-    }
-
-    function hasCloudSync(userId) {
-      return exists(/databases/$(database)/documents/users/$(userId)/entitlements/cloudSync) &&
-        get(/databases/$(database)/documents/users/$(userId)/entitlements/cloudSync).data.active == true;
-    }
-
     function canUseCloudSync(userId) {
-      return owns(userId) && emailVerified() && hasCloudSync(userId);
+      return owns(userId);
     }
 
     function userShellKeys() {

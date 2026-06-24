@@ -9,7 +9,7 @@
 - 录制自己的发音，保存后可随时替换旧录音
 - 按词、备注、标签搜索，支持 `#标签名` 快速过滤
 - 所有数据保存在本机，不需要账号或云服务
-- 登录并开通云同步后，可用 Firebase 在桌面和移动端同步词条、标签和当前录音
+- 登录后可用 Firebase 在桌面和移动端实时同步词条、标签和当前录音
 
 ## Tech Stack
 
@@ -17,7 +17,7 @@
 - React + TypeScript + Vite for the renderer
 - `sql.js` for a local SQLite database file
 - `MediaRecorder` for browser-native audio capture
-- Firebase Auth, Firestore, Cloud Storage, and Cloud Functions for optional paid cloud sync
+- Firebase Auth, Firestore, Cloud Storage, and Cloud Functions for optional cloud sync support
 - Vitest + Testing Library for UI flow tests
 
 ## Local Development
@@ -99,24 +99,24 @@ In React Native, `mobile/` uses an independent Expo SQLite database named `vocab
 
 ## Firebase Cloud Sync
 
-Cloud sync is optional and defaults off. Local mode remains the default until the user signs in, has an active cloud sync entitlement, and explicitly enables cloud mode.
+Cloud sync is optional for local-only use. After a user signs in, the app initializes the user's cloud library, imports the local library only if that cloud library has not been initialized, and switches to cloud mode automatically.
 
 - Web/Electron uses the Firebase Web SDK with Firestore persistent local cache.
 - Mobile uses React Native Firebase and requires an Expo dev client or production custom build.
 - Firestore stores `users/{uid}/tags/{tagId}` and `users/{uid}/words/{wordId}` metadata.
 - Cloud Storage stores recordings under `recordings/{uid}/{wordId}/{recordingId}.{ext}`.
-- `users/{uid}/entitlements/cloudSync` controls paid sync access.
+- `users/{uid}/entitlements/cloudSync` is retained for future subscription features but does not gate sync access.
 - Firestore's offline behavior is used for text metadata; conflicts follow Firebase last-write-wins semantics.
 - Recording uploads use a local queue because Cloud Storage does not provide the same offline write queue as Firestore.
 
 Firebase project files:
 
-- `firestore.rules` protects user-scoped vocabulary documents behind Auth and active entitlement.
-- `storage.rules` protects recording files behind Auth and active entitlement.
+- `firestore.rules` protects user-scoped vocabulary documents behind Auth ownership.
+- `storage.rules` protects recording files behind Auth ownership.
 - `functions/src/index.ts` contains Stripe entitlement webhook handling and old-recording cleanup.
 
 For desktop/Web builds, copy `.env.example` to `.env.local` and fill in the Firebase Web app config from Firebase Console. `.env.local` is ignored by Git.
-Enable the Email/Password sign-in provider in Firebase Auth and configure the verification email template. New email/password accounts receive a verification email after registration, and cloud sync can only be enabled after the email is verified and the account has an active cloud sync entitlement.
+Enable the Email/Password sign-in provider in Firebase Auth and configure the verification email template. New email/password accounts receive a verification email after registration, but verification does not block cloud sync.
 
 For mobile builds, download the Firebase native app config files and place them locally:
 
@@ -127,6 +127,6 @@ These files are ignored by Git.
 
 ## MVP Limits
 
-- Cloud sync is optional and subscription-gated; local-only use still works without accounts.
+- Cloud sync starts after login; local-only use still works without accounts.
 - Each word has one primary tag and one current recording.
 - No automatic transcription, pronunciation scoring, or teacher reference audio.

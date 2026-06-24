@@ -113,17 +113,17 @@ button {
   font-size: 12px;
 }
 
-.cloud-panel {
+.account-dock {
   display: grid;
   gap: 10px;
-  margin: 14px 0 0;
+  margin-top: auto;
   padding: 12px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: #f8fbfa;
 }
 
-.cloud-heading {
+.account-heading {
   display: flex;
   align-items: center;
   gap: 7px;
@@ -133,34 +133,16 @@ button {
   font-weight: 700;
 }
 
-.cloud-heading span,
-.cloud-email {
+.account-heading span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.cloud-auth,
 .cloud-account {
   display: grid;
   gap: 8px;
-}
-
-.cloud-auth input {
-  width: 100%;
-  min-width: 0;
-  height: 34px;
-  padding: 0 9px;
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  outline: 0;
-}
-
-.cloud-auth input:focus {
-  border-color: #9bcbbd;
 }
 
 .cloud-account-line {
@@ -171,9 +153,12 @@ button {
 }
 
 .cloud-email {
+  min-width: 0;
   color: var(--text);
   font-size: 13px;
   font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .verify-pill {
@@ -217,6 +202,13 @@ button {
   flex-wrap: wrap;
 }
 
+.account-auth-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+
+.account-auth-actions button,
 .cloud-actions button {
   display: inline-flex;
   align-items: center;
@@ -232,10 +224,66 @@ button {
   font-weight: 800;
 }
 
+.account-auth-actions button:disabled,
 .cloud-actions button:disabled {
   color: #90a59f;
   background: #e8efec;
   cursor: not-allowed;
+}
+
+.auth-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(24, 33, 31, 0.24);
+}
+
+.auth-modal {
+  width: min(360px, 100%);
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 22px 58px rgba(24, 33, 31, 0.2);
+}
+
+.auth-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
+}
+
+.auth-modal-header h2 {
+  margin: 3px 0 0;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.auth-modal-form {
+  display: grid;
+  gap: 10px;
+}
+
+.compact-field {
+  gap: 6px;
+}
+
+.auth-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.auth-modal-actions .primary-button,
+.auth-modal-actions .secondary-button {
+  height: 36px;
+  padding: 0 12px;
 }
 
 .tag-nav {
@@ -273,6 +321,7 @@ button {
 }
 
 .tag-section {
+  flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
 }

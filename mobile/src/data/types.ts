@@ -33,6 +33,10 @@ export type DeletedWordResult = {
   recordingUri: string | null;
 };
 
+export type RepositoryChangeListener = () => void;
+
+export type RepositoryUnsubscribe = () => void;
+
 export type VocabularyRepositoryApi = {
   listWords(filters?: WordListFilters): Promise<MobileWordRecord[]>;
   listTags(): Promise<TagRecord[]>;
@@ -41,6 +45,7 @@ export type VocabularyRepositoryApi = {
   updateWord(id: string, input: WordInput): Promise<MobileWordRecord>;
   deleteWord(id: string): Promise<DeletedWordResult>;
   saveRecordingForWord(input: SavedRecordingInput): Promise<RecordingReplacementResult>;
+  subscribe?(listener: RepositoryChangeListener): RepositoryUnsubscribe;
 };
 
 export type RecordingFileStore = {

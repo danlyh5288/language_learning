@@ -12,11 +12,11 @@ import {
 } from "firebase/auth";
 import {
   collection,
-  deleteField,
   doc,
   getDoc,
   getDocs,
   initializeFirestore,
+  onSnapshot,
   persistentLocalCache,
   persistentSingleTabManager,
   query,
@@ -27,7 +27,6 @@ import {
 } from "firebase/firestore";
 import { getDownloadURL, getStorage, ref, uploadBytes, type FirebaseStorage } from "firebase/storage";
 import {
-  cloudSyncEntitlementPath,
   cloudTagToRecord,
   cloudWordToRecord,
   extensionForMimeType,
@@ -36,7 +35,6 @@ import {
   userPath,
   userTagsPath,
   userWordsPath,
-  type CloudEntitlementDocument,
   type CloudLibraryDocument,
   type CloudTagDocument,
   type CloudWordDocument
@@ -44,7 +42,9 @@ import {
 import {
   type AuthInput,
   type AuthState,
+  type CloudSyncChangeListener,
   type CloudSyncStatus,
+  type CloudSyncUnsubscribe,
   type CloudUser,
   type RecordingSaveInput,
   type TagRecord,
@@ -59,6 +59,7 @@ import { getFirebaseWebConfig } from "./firebaseConfig";
 const CLOUD_MODE_KEY = "pronunciation-vault-cloud-mode";
 const QUEUE_DB_NAME = "pronunciation-vault-cloud-recordings";
 const QUEUE_STORE_NAME = "recordingUploads";
+const MAX_AUTH_SESSION_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 type QueuedRecordingUpload = {
   id: string;
@@ -138,7 +139,8 @@ export function createFirebaseAwareApi(localApi: VocabApi): VocabApi {
       getStatus: () => cloud.getStatus(),
       enable: () => cloud.enableCloudSync(),
       disable: () => cloud.disableCloudSync(),
-      refresh: () => cloud.refresh()
+      refresh: () => cloud.refresh(),
+      subscribe: (listener: CloudSyncChangeListener) => cloud.subscribe(listener)
     }
   };
 }
@@ -159,15 +161,14 @@ class FirebaseCloudApi {
 
   async getAuthState(): Promise<AuthState> {
     const { auth } = await getRuntime();
-    await ensureAuthPersistence(auth);
-    return { user: mapUser(auth.currentUser) };
+    return { user: mapUser(await getActiveAuthUser(auth)) };
   }
 
   async signIn(input: AuthInput): Promise<AuthState> {
     const { auth } = await getRuntime();
     await ensureAuthPersistence(auth);
     const credential = await signInWithEmailAndPassword(auth, input.email.trim(), input.password);
-    localStorage.setItem(CLOUD_MODE_KEY, "local");
+    await this.activateCloudSync(credential.user.uid);
     return { user: mapUser(credential.user) };
   }
 
@@ -175,14 +176,14 @@ class FirebaseCloudApi {
     const { auth } = await getRuntime();
     await ensureAuthPersistence(auth);
     const credential = await createUserWithEmailAndPassword(auth, input.email.trim(), input.password);
-    await sendEmailVerification(credential.user);
-    localStorage.setItem(CLOUD_MODE_KEY, "local");
+    await sendEmailVerification(credential.user).catch(() => undefined);
+    await this.activateCloudSync(credential.user.uid);
     return { user: mapUser(credential.user) };
   }
 
   async sendVerificationEmail(): Promise<AuthState> {
     const { auth } = await getRuntime();
-    const user = auth.currentUser;
+    const user = await getActiveAuthUser(auth);
     if (!user) {
       throw new Error("请先登录后再发送验证邮件");
     }
@@ -199,47 +200,30 @@ class FirebaseCloudApi {
 
   async getStatus(): Promise<CloudSyncStatus> {
     const { auth } = await getRuntime();
-    const user = mapUser(auth.currentUser);
-    const canUseCloud = this.isCloudEnabled() && Boolean(user?.emailVerified);
+    const user = mapUser(await getActiveAuthUser(auth));
+    const canUseCloud = this.isCloudEnabled() && Boolean(user);
     if (this.isCloudEnabled() && !canUseCloud) {
       localStorage.setItem(CLOUD_MODE_KEY, "local");
     }
-    const isEntitled = user?.emailVerified ? await this.isUserEntitled(user.uid) : false;
     return {
       mode: canUseCloud ? "cloud" : "local",
       user,
-      isEntitled,
+      isEntitled: Boolean(user),
       isEnabled: canUseCloud,
       isOnline: navigator.onLine,
       isSyncing: false,
-      pendingRecordingUploads: user?.emailVerified ? await countQueuedRecordings(user.uid) : 0,
+      pendingRecordingUploads: user ? await countQueuedRecordings(user.uid) : 0,
       lastSyncError: null
     };
   }
 
   async enableCloudSync(): Promise<CloudSyncStatus> {
-    const { auth, db } = await getRuntime();
-    const user = auth.currentUser;
+    const { auth } = await getRuntime();
+    const user = await getActiveAuthUser(auth);
     if (!user) {
       throw new Error("请先登录后再开启云同步");
     }
-    await user.reload();
-    if (!user.emailVerified) {
-      throw new Error("请先验证邮箱后再开启云同步");
-    }
-    if (!(await this.isUserEntitled(user.uid))) {
-      throw new Error("当前账号尚未开通云同步订阅");
-    }
-
-    const userDocRef = doc(db, userPath(user.uid));
-    const userDoc = await getDoc(userDocRef);
-    const data = userDoc.data() as CloudLibraryDocument | undefined;
-    if (!data?.libraryInitialized) {
-      await this.importLocalLibrary(user.uid);
-      await setDoc(userDocRef, { libraryInitialized: true, updatedAt: new Date().toISOString() }, { merge: true });
-    }
-    localStorage.setItem(CLOUD_MODE_KEY, "cloud");
-    await this.processRecordingQueue(user.uid);
+    await this.activateCloudSync(user.uid);
     return this.getStatus();
   }
 
@@ -250,11 +234,10 @@ class FirebaseCloudApi {
 
   async refresh(): Promise<CloudSyncStatus> {
     const { auth } = await getRuntime();
-    if (auth.currentUser) {
-      await auth.currentUser.reload();
-      if (auth.currentUser.emailVerified) {
-        await this.processRecordingQueue(auth.currentUser.uid);
-      }
+    const user = await getActiveAuthUser(auth);
+    if (user) {
+      await user.reload();
+      await this.processRecordingQueue(user.uid);
     }
     return this.getStatus();
   }
@@ -264,11 +247,30 @@ class FirebaseCloudApi {
       return false;
     }
     const { auth } = await getRuntime();
-    if (auth.currentUser?.emailVerified) {
+    const user = await getActiveAuthUser(auth);
+    if (user) {
       return true;
     }
     localStorage.setItem(CLOUD_MODE_KEY, "local");
     return false;
+  }
+
+  async subscribe(listener: CloudSyncChangeListener): Promise<CloudSyncUnsubscribe> {
+    const { db, auth } = await getRuntime();
+    const user = await getActiveAuthUser(auth);
+    if (!user || !this.isCloudEnabled()) {
+      return () => undefined;
+    }
+
+    const notify = () => listener();
+    const unsubscribers = [
+      onSnapshot(query(collection(db, userTagsPath(user.uid)), where("deletedAt", "==", null)), notify),
+      onSnapshot(query(collection(db, userWordsPath(user.uid)), where("deletedAt", "==", null)), notify)
+    ];
+
+    return () => {
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
+    };
   }
 
   async listTags(): Promise<TagRecord[]> {
@@ -437,6 +439,19 @@ class FirebaseCloudApi {
     return getDownloadURL(ref(storage, data.recording.storagePath));
   }
 
+  private async activateCloudSync(uid: string): Promise<void> {
+    const { db } = await getRuntime();
+    const userDocRef = doc(db, userPath(uid));
+    const userDoc = await getDoc(userDocRef);
+    const data = userDoc.data() as CloudLibraryDocument | undefined;
+    if (!data?.libraryInitialized) {
+      await this.importLocalLibrary(uid);
+      await setDoc(userDocRef, { libraryInitialized: true, updatedAt: new Date().toISOString() }, { merge: true });
+    }
+    localStorage.setItem(CLOUD_MODE_KEY, "cloud");
+    await this.processRecordingQueue(uid);
+  }
+
   private async importLocalLibrary(uid: string): Promise<void> {
     const { db, storage } = await getRuntime();
     const [tags, words] = await Promise.all([this.localApi.tags.list(), this.localApi.words.list()]);
@@ -502,20 +517,6 @@ class FirebaseCloudApi {
     return word;
   }
 
-  private async isUserEntitled(uid: string): Promise<boolean> {
-    const { db } = await getRuntime();
-    const snapshot = await getDoc(doc(db, cloudSyncEntitlementPath(uid)));
-    const data = snapshot.data() as CloudEntitlementDocument | undefined;
-    if (!data?.active) {
-      return false;
-    }
-    if (!data.expiresAt) {
-      return true;
-    }
-    const expiresAt = typeof data.expiresAt === "string" ? data.expiresAt : data.expiresAt.toDate?.().toISOString();
-    return expiresAt ? new Date(expiresAt).getTime() > Date.now() : true;
-  }
-
   private async processRecordingQueue(uid: string): Promise<void> {
     if (!navigator.onLine) {
       return;
@@ -562,6 +563,31 @@ async function getRuntime(): Promise<FirebaseRuntime> {
 function ensureAuthPersistence(auth: Auth): Promise<void> {
   authPersistencePromise ??= setPersistence(auth, browserLocalPersistence);
   return authPersistencePromise;
+}
+
+async function getActiveAuthUser(auth: Auth): Promise<User | null> {
+  await ensureAuthPersistence(auth);
+  const user = auth.currentUser;
+  if (!user) {
+    return null;
+  }
+  if (!isAuthSessionExpired(user)) {
+    return user;
+  }
+
+  localStorage.setItem(CLOUD_MODE_KEY, "local");
+  await firebaseSignOut(auth);
+  return null;
+}
+
+function isAuthSessionExpired(user: User): boolean {
+  const lastSignInTime = user.metadata?.lastSignInTime;
+  if (!lastSignInTime) {
+    return false;
+  }
+
+  const lastSignInMs = Date.parse(lastSignInTime);
+  return Number.isFinite(lastSignInMs) && Date.now() - lastSignInMs > MAX_AUTH_SESSION_AGE_MS;
 }
 
 function mapUser(user: User | null): CloudUser | null {
@@ -635,12 +661,18 @@ async function openQueueDb(): Promise<IDBDatabase> {
 }
 
 async function putQueuedRecording(uid: string, upload: QueuedRecordingUpload): Promise<void> {
+  if (!hasIndexedDb()) {
+    return;
+  }
   const db = await openQueueDb();
   await idbRequest(db.transaction(QUEUE_STORE_NAME, "readwrite").objectStore(QUEUE_STORE_NAME).put({ ...upload, uid }));
   db.close();
 }
 
 async function listQueuedRecordings(uid: string): Promise<QueuedRecordingUpload[]> {
+  if (!hasIndexedDb()) {
+    return [];
+  }
   const db = await openQueueDb();
   const tx = db.transaction(QUEUE_STORE_NAME, "readonly");
   const result = await idbRequest<({ uid: string } & QueuedRecordingUpload)[]>(
@@ -651,6 +683,9 @@ async function listQueuedRecordings(uid: string): Promise<QueuedRecordingUpload[
 }
 
 async function countQueuedRecordings(uid: string): Promise<number> {
+  if (!hasIndexedDb()) {
+    return 0;
+  }
   const db = await openQueueDb();
   const count = await idbRequest<number>(db.transaction(QUEUE_STORE_NAME, "readonly").objectStore(QUEUE_STORE_NAME).index("uid").count(uid));
   db.close();
@@ -658,6 +693,9 @@ async function countQueuedRecordings(uid: string): Promise<number> {
 }
 
 async function getQueuedRecordingForWord(uid: string, wordId: string): Promise<QueuedRecordingUpload | null> {
+  if (!hasIndexedDb()) {
+    return null;
+  }
   const db = await openQueueDb();
   const results = await idbRequest<({ uid: string } & QueuedRecordingUpload)[]>(
     db.transaction(QUEUE_STORE_NAME, "readonly").objectStore(QUEUE_STORE_NAME).index("uid_wordId").getAll([uid, wordId])
@@ -667,6 +705,9 @@ async function getQueuedRecordingForWord(uid: string, wordId: string): Promise<Q
 }
 
 async function deleteQueuedRecording(uid: string, id: string): Promise<void> {
+  if (!hasIndexedDb()) {
+    return;
+  }
   const db = await openQueueDb();
   const existing = await idbRequest<({ uid: string } & QueuedRecordingUpload) | undefined>(
     db.transaction(QUEUE_STORE_NAME, "readonly").objectStore(QUEUE_STORE_NAME).get(id)
@@ -677,6 +718,10 @@ async function deleteQueuedRecording(uid: string, id: string): Promise<void> {
   }
   await idbRequest(db.transaction(QUEUE_STORE_NAME, "readwrite").objectStore(QUEUE_STORE_NAME).delete(id));
   db.close();
+}
+
+function hasIndexedDb(): boolean {
+  return typeof indexedDB !== "undefined";
 }
 
 function idbRequest<T = unknown>(request: IDBRequest<T>): Promise<T> {
