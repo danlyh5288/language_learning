@@ -1,9 +1,10 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { CloudSyncStatus, VocabApi } from "../shared/types";
+import type { CloudSyncStatus, VocabApi, WordRecord } from "../shared/types";
 
 const mockApi = vi.hoisted(() => {
+  const signedInUser = { uid: "user-1", email: "learner@example.com", emailVerified: false };
   const status: CloudSyncStatus = {
     mode: "local",
     user: null,
@@ -16,8 +17,10 @@ const mockApi = vi.hoisted(() => {
   };
 
   return {
+    signedInUser,
     status,
-    wordsList: vi.fn(async () => []),
+    cloudListener: null as null | (() => void),
+    wordsList: vi.fn(async () => [] as WordRecord[]),
     wordsCreate: vi.fn(),
     wordsUpdate: vi.fn(),
     wordsDelete: vi.fn(),
@@ -26,14 +29,15 @@ const mockApi = vi.hoisted(() => {
     saveForWord: vi.fn(),
     getPlaybackUrl: vi.fn(async () => null),
     getAuthState: vi.fn(async () => ({ user: status.user })),
-    signIn: vi.fn(async () => ({ user: null })),
-    signUp: vi.fn(async () => ({ user: null })),
+    signIn: vi.fn(async () => ({ user: signedInUser })),
+    signUp: vi.fn(async () => ({ user: signedInUser })),
     sendVerificationEmail: vi.fn(async () => ({ user: null })),
     signOut: vi.fn(async () => ({ user: null })),
     getStatus: vi.fn(async () => status),
     enable: vi.fn(async () => status),
     disable: vi.fn(async () => status),
-    refresh: vi.fn(async () => status)
+    refresh: vi.fn(async () => status),
+    subscribe: vi.fn()
   };
 });
 
@@ -64,7 +68,8 @@ vi.mock("./api", () => ({
       getStatus: mockApi.getStatus,
       enable: mockApi.enable,
       disable: mockApi.disable,
-      refresh: mockApi.refresh
+      refresh: mockApi.refresh,
+      subscribe: mockApi.subscribe
     }
   } satisfies VocabApi,
   isElectronRuntime: false
@@ -93,71 +98,180 @@ describe("Cloud auth panel", () => {
     mockApi.saveForWord.mockClear();
     mockApi.getPlaybackUrl.mockClear();
     mockApi.getAuthState.mockClear();
-    mockApi.signIn.mockClear();
+    mockApi.signIn.mockReset();
+    mockApi.signIn.mockImplementation(async () => {
+      Object.assign(mockApi.status, {
+        mode: "cloud",
+        user: mockApi.signedInUser,
+        isEntitled: true,
+        isEnabled: true
+      } satisfies Partial<CloudSyncStatus>);
+      return { user: mockApi.signedInUser };
+    });
     mockApi.signUp.mockReset();
-    mockApi.signUp.mockResolvedValue({ user: null });
+    mockApi.signUp.mockImplementation(async () => {
+      Object.assign(mockApi.status, {
+        mode: "cloud",
+        user: mockApi.signedInUser,
+        isEntitled: true,
+        isEnabled: true
+      } satisfies Partial<CloudSyncStatus>);
+      return { user: mockApi.signedInUser };
+    });
     mockApi.sendVerificationEmail.mockClear();
     mockApi.signOut.mockClear();
-    mockApi.getStatus.mockClear();
+    mockApi.getStatus.mockReset();
+    mockApi.getStatus.mockResolvedValue(mockApi.status);
     mockApi.enable.mockClear();
     mockApi.disable.mockClear();
     mockApi.refresh.mockClear();
+    mockApi.cloudListener = null;
+    mockApi.subscribe.mockReset();
+    mockApi.subscribe.mockImplementation(async (listener: () => void) => {
+      mockApi.cloudListener = listener;
+      return vi.fn(() => {
+        mockApi.cloudListener = null;
+      });
+    });
   });
 
-  it("explains auth requirements and enables registration only for valid input", async () => {
+  it("opens login modal and enables submission only for valid input", async () => {
     const user = userEvent.setup();
     render(<App />);
 
-    const panel = await screen.findByRole("region", { name: "云同步" });
-    const registerButton = within(panel).getByRole("button", { name: "注册" });
-    const signInButton = within(panel).getByRole("button", { name: "登录" });
+    const account = await screen.findByRole("region", { name: "账户" });
 
-    expect(within(panel).getByText("请输入邮箱和至少 6 位密码")).toBeInTheDocument();
-    expect(registerButton).toBeDisabled();
-    expect(signInButton).toBeDisabled();
+    expect(within(account).getByRole("button", { name: "注册" })).toBeEnabled();
+    expect(within(account).getByRole("button", { name: "登录" })).toBeEnabled();
+    expect(screen.queryByLabelText("云同步邮箱")).not.toBeInTheDocument();
 
-    await user.type(within(panel).getByLabelText("云同步邮箱"), "learner@example.com");
-    await user.type(within(panel).getByLabelText("云同步密码"), "12345");
+    await user.click(within(account).getByRole("button", { name: "登录" }));
 
-    expect(within(panel).getByText("密码至少 6 位")).toBeInTheDocument();
-    expect(registerButton).toBeDisabled();
+    const modal = await screen.findByRole("dialog", { name: "登录" });
+    const submitButton = within(modal).getByRole("button", { name: "登录" });
 
-    await user.type(within(panel).getByLabelText("云同步密码"), "6");
+    expect(within(modal).getByText("请输入邮箱和至少 6 位密码")).toBeInTheDocument();
+    expect(submitButton).toBeDisabled();
 
-    expect(registerButton).toBeEnabled();
-    expect(signInButton).toBeEnabled();
+    await user.type(within(modal).getByLabelText("云同步邮箱"), "learner@example.com");
+    await user.type(within(modal).getByLabelText("云同步密码"), "12345");
+
+    expect(within(modal).getByText("密码至少 6 位")).toBeInTheDocument();
+    expect(submitButton).toBeDisabled();
+
+    await user.type(within(modal).getByLabelText("云同步密码"), "6");
+
+    expect(submitButton).toBeEnabled();
+
+    await user.click(submitButton);
+
+    expect(mockApi.signIn).toHaveBeenCalledWith({
+      email: "learner@example.com",
+      password: "123456"
+    });
+    expect(await screen.findByRole("region", { name: "账户" })).toHaveTextContent("learner@example.com");
+    expect(await screen.findByText("已登录并开启云同步")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "登录" })).not.toBeInTheDocument();
   });
 
-  it("shows Firebase auth errors inside the cloud panel", async () => {
+  it("shows Firebase auth errors inside the auth modal", async () => {
     const user = userEvent.setup();
     mockApi.signUp.mockRejectedValueOnce({ code: "auth/email-already-in-use" });
 
     render(<App />);
 
-    const panel = await screen.findByRole("region", { name: "云同步" });
-    await user.type(within(panel).getByLabelText("云同步邮箱"), "learner@example.com");
-    await user.type(within(panel).getByLabelText("云同步密码"), "123456");
-    await user.click(within(panel).getByRole("button", { name: "注册" }));
+    const account = await screen.findByRole("region", { name: "账户" });
+    await user.click(within(account).getByRole("button", { name: "注册" }));
 
-    expect(await within(panel).findByRole("alert")).toHaveTextContent("这个邮箱已注册，请直接登录");
+    const modal = await screen.findByRole("dialog", { name: "注册" });
+    await user.type(within(modal).getByLabelText("云同步邮箱"), "learner@example.com");
+    await user.type(within(modal).getByLabelText("云同步密码"), "123456");
+    await user.click(within(modal).getByRole("button", { name: "注册" }));
+
+    expect(await within(modal).findByRole("alert")).toHaveTextContent("这个邮箱已注册，请直接登录");
   });
 
-  it("blocks cloud sync and allows resending verification for unverified users", async () => {
+  it("keeps passive cloud status failures out of the account dock after sign-in", async () => {
+    const user = userEvent.setup();
+    mockApi.getStatus
+      .mockResolvedValueOnce(mockApi.status)
+      .mockRejectedValueOnce({ code: "unavailable" });
+
+    render(<App />);
+
+    const account = await screen.findByRole("region", { name: "账户" });
+    await user.click(within(account).getByRole("button", { name: "登录" }));
+
+    const modal = await screen.findByRole("dialog", { name: "登录" });
+    await user.type(within(modal).getByLabelText("云同步邮箱"), "learner@example.com");
+    await user.type(within(modal).getByLabelText("云同步密码"), "123456");
+    await user.click(within(modal).getByRole("button", { name: "登录" }));
+
+    expect(await within(account).findByText("learner@example.com")).toBeInTheDocument();
+    await waitFor(() => expect(mockApi.getStatus).toHaveBeenCalledTimes(3));
+    expect(within(account).queryByRole("button", { name: "注册" })).not.toBeInTheDocument();
+    expect(within(account).queryByRole("button", { name: "登录" })).not.toBeInTheDocument();
+    expect(within(account).queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("shows Firebase connectivity errors for explicit account refresh", async () => {
+    const user = userEvent.setup();
+    Object.assign(mockApi.status, {
+      user: { uid: "user-1", email: "learner@example.com", emailVerified: true },
+      isEntitled: false
+    } satisfies Partial<CloudSyncStatus>);
+    mockApi.refresh.mockRejectedValueOnce({ code: "unavailable" });
+
+    render(<App />);
+
+    const account = await screen.findByRole("region", { name: "账户" });
+    await user.click(within(account).getByRole("button", { name: "刷新云同步" }));
+
+    expect(await within(account).findByRole("alert")).toHaveTextContent("当前无法连接 Firebase，请检查网络后重试");
+  });
+
+  it("allows cloud sync for unverified users and can resend verification", async () => {
     const user = userEvent.setup();
     Object.assign(mockApi.status, {
       user: { uid: "user-1", email: "learner@example.com", emailVerified: false },
-      isEntitled: true
+      mode: "cloud",
+      isEntitled: true,
+      isEnabled: true
     } satisfies Partial<CloudSyncStatus>);
 
     render(<App />);
 
-    const panel = await screen.findByRole("region", { name: "云同步" });
-    expect(await within(panel).findByText("已登录 · 邮箱待验证")).toBeInTheDocument();
-    expect(within(panel).getByRole("button", { name: "开启" })).toBeDisabled();
+    const account = await screen.findByRole("region", { name: "账户" });
+    expect(await within(account).findByText("云端模式 · 已同步")).toBeInTheDocument();
+    expect(within(account).getByText("learner@example.com")).toBeInTheDocument();
+    expect(within(account).queryByRole("button", { name: "注册" })).not.toBeInTheDocument();
+    expect(within(account).queryByRole("button", { name: "登录" })).not.toBeInTheDocument();
+    expect(within(account).getByRole("button", { name: "停用" })).toBeEnabled();
 
-    await user.click(within(panel).getByRole("button", { name: "重发验证邮件" }));
+    await user.click(within(account).getByRole("button", { name: "重发验证邮件" }));
 
     expect(mockApi.sendVerificationEmail).toHaveBeenCalledTimes(1);
-    expect(await within(panel).findByText("验证邮件已重新发送")).toBeInTheDocument();
+    expect(await within(account).findByText("验证邮件已重新发送")).toBeInTheDocument();
+  });
+
+  it("reloads vocabulary when cloud snapshots change", async () => {
+    Object.assign(mockApi.status, {
+      user: { uid: "user-1", email: "learner@example.com", emailVerified: false },
+      mode: "cloud",
+      isEntitled: true,
+      isEnabled: true
+    } satisfies Partial<CloudSyncStatus>);
+    mockApi.wordsList
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: "word-remote", text: "远端", tagId: null, tagName: null, tagColor: null, toneNote: "", audioDurationMs: null, hasRecording: false, createdAt: "2026-06-24T10:00:00.000Z", updatedAt: "2026-06-24T10:00:00.000Z" }])
+      .mockResolvedValueOnce([{ id: "word-remote", text: "远端", tagId: null, tagName: null, tagColor: null, toneNote: "", audioDurationMs: null, hasRecording: false, createdAt: "2026-06-24T10:00:00.000Z", updatedAt: "2026-06-24T10:00:00.000Z" }]);
+
+    render(<App />);
+
+    await waitFor(() => expect(mockApi.subscribe).toHaveBeenCalledTimes(1));
+    mockApi.cloudListener?.();
+
+    expect(await screen.findByText("远端")).toBeInTheDocument();
   });
 });

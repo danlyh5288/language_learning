@@ -68,7 +68,8 @@ function createLazyFirebaseApi(localApi: VocabApi): VocabApi {
       },
       enable: async () => (await getCloudApi()).cloudSync?.enable() ?? Promise.reject(new Error("云同步不可用")),
       disable: async () => (await getCloudApi()).cloudSync?.disable() ?? Promise.reject(new Error("云同步不可用")),
-      refresh: async () => (await getCloudApi()).cloudSync?.refresh() ?? Promise.reject(new Error("云同步不可用"))
+      refresh: async () => (await getCloudApi()).cloudSync?.refresh() ?? Promise.reject(new Error("云同步不可用")),
+      subscribe: async (listener) => (await getCloudApi()).cloudSync?.subscribe?.(listener) ?? (() => undefined)
     }
   };
 }

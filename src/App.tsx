@@ -16,12 +16,15 @@ import {
   Square,
   Tag,
   Trash2,
+  UserRound,
   X
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import appLogo from "../assets/app-logo.svg";
 import { api, isElectronRuntime } from "./api";
 import {
+  type AuthState,
+  type CloudUser,
   type TagRecord,
   type CloudSyncStatus,
   UNTAGGED_FILTER_ID,
@@ -33,6 +36,13 @@ type PendingRecording = {
   blob: Blob;
   durationMs: number;
   url: string;
+};
+
+type AuthMode = "signIn" | "signUp";
+type LoadCloudStatusOptions = {
+  authState?: AuthState;
+  showError?: boolean;
+  assumeCloudEnabled?: boolean;
 };
 
 const emptyDraft: WordInput = {
@@ -59,6 +69,7 @@ export default function App() {
   const [cloudStatus, setCloudStatus] = useState<CloudSyncStatus | null>(null);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
+  const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const [isCloudBusy, setIsCloudBusy] = useState(false);
   const [cloudMessage, setCloudMessage] = useState<string | null>(null);
   const [cloudError, setCloudError] = useState<string | null>(null);
@@ -66,15 +77,25 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const listAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  const loadCloudStatus = useCallback(async () => {
+  const loadCloudStatus = useCallback(async ({ authState, showError = false, assumeCloudEnabled = false }: LoadCloudStatusOptions = {}) => {
     if (!api.cloudSync) {
       return;
     }
     try {
-      setCloudStatus(await api.cloudSync.getStatus());
+      const nextStatus = await api.cloudSync.getStatus();
+      if (!nextStatus.user && authState?.user) {
+        setCloudStatus(cloudStatusFromAuthState(authState, nextStatus, assumeCloudEnabled));
+      } else {
+        setCloudStatus(nextStatus);
+      }
       setCloudError(null);
     } catch (caught) {
-      setCloudError(cloudErrorMessage(caught));
+      if (authState) {
+        setCloudStatus((current) => cloudStatusFromAuthState(authState, current, assumeCloudEnabled));
+      }
+      if (showError) {
+        setCloudError(cloudErrorMessage(caught));
+      }
     }
   }, []);
 
@@ -90,7 +111,7 @@ export default function App() {
       setTags(nextTags);
       setAllWords(nextAllWords);
       setError(null);
-      await loadCloudStatus();
+      void loadCloudStatus();
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
@@ -101,6 +122,32 @@ export default function App() {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (!cloudStatus?.isEnabled || !api.cloudSync?.subscribe) {
+      return;
+    }
+
+    let unsubscribe: (() => void) | null = null;
+    let cancelled = false;
+
+    void api.cloudSync.subscribe(() => {
+      void loadData();
+    }).then((nextUnsubscribe) => {
+      if (cancelled) {
+        nextUnsubscribe();
+        return;
+      }
+      unsubscribe = nextUnsubscribe;
+    }).catch((caught) => {
+      setCloudError(cloudErrorMessage(caught));
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  }, [cloudStatus?.isEnabled, cloudStatus?.user?.uid, loadData]);
 
   useEffect(() => {
     if (!selectedWord) {
@@ -167,6 +214,21 @@ export default function App() {
 
   const title = isCreating ? "新词条" : selectedWord?.text ?? "选择词条";
   const canSave = draft.text.trim().length > 0 && !isSaving;
+
+  const openAuthModal = useCallback((mode: AuthMode) => {
+    setAuthMode(mode);
+    setCloudError(null);
+    setCloudMessage(null);
+  }, []);
+
+  const closeAuthModal = useCallback(() => {
+    if (isCloudBusy) {
+      return;
+    }
+    setAuthMode(null);
+    setAuthPassword("");
+    setCloudError(null);
+  }, [isCloudBusy]);
 
   function clearPendingRecording() {
     setPendingRecording((current) => {
@@ -323,10 +385,16 @@ export default function App() {
     setCloudError(null);
     setCloudMessage(null);
     try {
-      await api.auth.signIn({ email: authEmail, password: authPassword });
+      const authState = await api.auth.signIn({ email: authEmail, password: authPassword });
+      setCloudStatus((current) => cloudStatusFromAuthState(authState, current, true));
       setAuthPassword("");
-      setCloudMessage("已登录");
-      await loadCloudStatus();
+      setAuthMode(null);
+      setSelectedWord(null);
+      setIsCreating(false);
+      setDraft(emptyDraft);
+      setCloudMessage("已登录并开启云同步");
+      await loadCloudStatus({ authState, assumeCloudEnabled: true });
+      await loadData();
     } catch (caught) {
       setCloudError(cloudErrorMessage(caught));
     } finally {
@@ -342,10 +410,16 @@ export default function App() {
     setCloudError(null);
     setCloudMessage(null);
     try {
-      await api.auth.signUp({ email: authEmail, password: authPassword });
+      const authState = await api.auth.signUp({ email: authEmail, password: authPassword });
+      setCloudStatus((current) => cloudStatusFromAuthState(authState, current, true));
       setAuthPassword("");
-      setCloudMessage("验证邮件已发送");
-      await loadCloudStatus();
+      setAuthMode(null);
+      setSelectedWord(null);
+      setIsCreating(false);
+      setDraft(emptyDraft);
+      setCloudMessage("已注册并开启云同步");
+      await loadCloudStatus({ authState, assumeCloudEnabled: true });
+      await loadData();
     } catch (caught) {
       setCloudError(cloudErrorMessage(caught));
     } finally {
@@ -363,7 +437,7 @@ export default function App() {
     try {
       await api.auth.sendVerificationEmail();
       setCloudMessage("验证邮件已重新发送");
-      await loadCloudStatus();
+      await loadCloudStatus({ showError: true });
     } catch (caught) {
       setCloudError(cloudErrorMessage(caught));
     } finally {
@@ -453,52 +527,35 @@ export default function App() {
   }
 
   return (
-    <main className="app-shell">
-      <aside className="sidebar" aria-label="标签">
-        <div className="brand">
-          <div className="brand-mark">
-            <img src={appLogo} alt="" aria-hidden="true" />
+    <>
+      <main className="app-shell">
+        <aside className="sidebar" aria-label="标签">
+          <div className="brand">
+            <div className="brand-mark">
+              <img src={appLogo} alt="" aria-hidden="true" />
+            </div>
+            <div>
+              <h1>发音词库</h1>
+              <p>{cloudStatus?.isEnabled ? "云端模式" : isElectronRuntime ? "本地模式" : "浏览器预览"}</p>
+            </div>
           </div>
-          <div>
-            <h1>发音词库</h1>
-            <p>{cloudStatus?.isEnabled ? "云端模式" : isElectronRuntime ? "本地模式" : "浏览器预览"}</p>
-          </div>
-        </div>
 
-        <CloudPanel
-          status={cloudStatus}
-          email={authEmail}
-          password={authPassword}
-          busy={isCloudBusy}
-          message={cloudMessage}
-          error={cloudError}
-          onEmailChange={setAuthEmail}
-          onPasswordChange={setAuthPassword}
-          onSignIn={() => void signIn()}
-          onSignUp={() => void signUp()}
-          onSendVerificationEmail={() => void sendVerificationEmail()}
-          onSignOut={() => void signOut()}
-          onEnable={() => void enableCloudSync()}
-          onDisable={() => void disableCloudSync()}
-          onRefresh={() => void refreshCloudSync()}
-        />
-
-        <nav className="tag-nav">
-          <FilterButton
-            active={activeTagId === null}
-            icon={<ListMusic size={16} />}
-            label="全部"
-            count={allWords.length}
-            onClick={() => setActiveTagId(null)}
-          />
-          <FilterButton
-            active={activeTagId === UNTAGGED_FILTER_ID}
-            icon={<Tag size={16} />}
-            label="未分类"
-            count={untaggedCount}
-            onClick={() => setActiveTagId(UNTAGGED_FILTER_ID)}
-          />
-        </nav>
+          <nav className="tag-nav">
+            <FilterButton
+              active={activeTagId === null}
+              icon={<ListMusic size={16} />}
+              label="全部"
+              count={allWords.length}
+              onClick={() => setActiveTagId(null)}
+            />
+            <FilterButton
+              active={activeTagId === UNTAGGED_FILTER_ID}
+              icon={<Tag size={16} />}
+              label="未分类"
+              count={untaggedCount}
+              onClick={() => setActiveTagId(UNTAGGED_FILTER_ID)}
+            />
+          </nav>
 
         <div className="tag-section">
           <div className="section-label">标签</div>
@@ -519,6 +576,19 @@ export default function App() {
             ))
           )}
         </div>
+
+        <AccountDock
+          status={cloudStatus}
+          busy={isCloudBusy}
+          message={cloudMessage}
+          error={authMode ? null : cloudError}
+          onOpenAuth={openAuthModal}
+          onSendVerificationEmail={() => void sendVerificationEmail()}
+          onSignOut={() => void signOut()}
+          onEnable={() => void enableCloudSync()}
+          onDisable={() => void disableCloudSync()}
+          onRefresh={() => void refreshCloudSync()}
+        />
       </aside>
 
       <section className="word-column" aria-label="词条列表">
@@ -695,6 +765,21 @@ export default function App() {
         )}
       </section>
     </main>
+    {authMode ? (
+      <AuthModal
+        mode={authMode}
+        email={authEmail}
+        password={authPassword}
+        busy={isCloudBusy}
+        error={cloudError}
+        onEmailChange={setAuthEmail}
+        onPasswordChange={setAuthPassword}
+        onModeChange={openAuthModal}
+        onClose={closeAuthModal}
+        onSubmit={authMode === "signIn" ? () => void signIn() : () => void signUp()}
+      />
+    ) : null}
+    </>
   );
 }
 
@@ -706,17 +791,12 @@ type FilterButtonProps = {
   onClick: () => void;
 };
 
-type CloudPanelProps = {
+type AccountDockProps = {
   status: CloudSyncStatus | null;
-  email: string;
-  password: string;
   busy: boolean;
   message: string | null;
   error: string | null;
-  onEmailChange: (email: string) => void;
-  onPasswordChange: (password: string) => void;
-  onSignIn: () => void;
-  onSignUp: () => void;
+  onOpenAuth: (mode: AuthMode) => void;
   onSendVerificationEmail: () => void;
   onSignOut: () => void;
   onEnable: () => void;
@@ -724,85 +804,54 @@ type CloudPanelProps = {
   onRefresh: () => void;
 };
 
-function CloudPanel({
+function AccountDock({
   status,
-  email,
-  password,
   busy,
   message,
   error,
-  onEmailChange,
-  onPasswordChange,
-  onSignIn,
-  onSignUp,
+  onOpenAuth,
   onSendVerificationEmail,
   onSignOut,
   onEnable,
   onDisable,
   onRefresh
-}: CloudPanelProps) {
+}: AccountDockProps) {
   const signedIn = Boolean(status?.user);
-  const canSubmitAuth = email.trim().length > 0 && password.length >= 6 && !busy;
   const emailVerified = status?.user?.emailVerified ?? false;
-  const passwordTooShort = password.length > 0 && password.length < 6;
-  const authHelpText = passwordTooShort ? "密码至少 6 位" : "请输入邮箱和至少 6 位密码";
-  const canEnableCloud = !busy && Boolean(status?.isEntitled) && emailVerified;
+  const canEnableCloud = !busy && signedIn;
   const statusLabel = status?.isEnabled
     ? status.pendingRecordingUploads > 0
       ? `云端模式 · ${status.pendingRecordingUploads} 个录音待上传`
       : "云端模式 · 已同步"
     : signedIn
-      ? !emailVerified
-        ? "已登录 · 邮箱待验证"
-        : status?.isEntitled
-        ? "已登录 · 可开启云同步"
-        : "已登录 · 未开通订阅"
+      ? "已登录 · 云同步已停用"
       : "本地模式";
 
   return (
-    <section className="cloud-panel" aria-label="云同步">
-      <div className="cloud-heading">
+    <section className="account-dock" aria-label="账户">
+      <div className="account-heading">
         <Cloud size={15} />
         <span>{statusLabel}</span>
       </div>
 
       {!signedIn ? (
-        <div className="cloud-auth">
-          <input
-            aria-label="云同步邮箱"
-            type="email"
-            value={email}
-            placeholder="邮箱"
-            aria-describedby="cloud-auth-help"
-            onChange={(event) => onEmailChange(event.target.value)}
-          />
-          <input
-            aria-label="云同步密码"
-            type="password"
-            value={password}
-            placeholder="密码"
-            aria-describedby="cloud-auth-help"
-            onChange={(event) => onPasswordChange(event.target.value)}
-          />
-          <p className="cloud-helper" id="cloud-auth-help">{authHelpText}</p>
-          <div className="cloud-actions">
-            <button type="button" disabled={!canSubmitAuth} onClick={onSignIn}>
-              <LogIn size={14} />
-              登录
-            </button>
-            <button type="button" disabled={!canSubmitAuth} onClick={onSignUp}>
-              <Plus size={14} />
-              注册
-            </button>
-          </div>
+        <div className="account-auth-actions">
+          <button type="button" disabled={busy} onClick={() => onOpenAuth("signUp")}>
+            <Plus size={14} />
+            注册
+          </button>
+          <button type="button" disabled={busy} onClick={() => onOpenAuth("signIn")}>
+            <LogIn size={14} />
+            登录
+          </button>
         </div>
       ) : (
         <div className="cloud-account">
           <div className="cloud-account-line">
+            <UserRound size={14} />
             <span className="cloud-email" title={status?.user?.email ?? undefined}>{status?.user?.email ?? "已登录"}</span>
             {!emailVerified ? <span className="verify-pill">邮箱未验证</span> : null}
           </div>
-          {!emailVerified ? <p className="cloud-helper">完成邮箱验证后刷新状态，再开启云同步。</p> : null}
           <div className="cloud-actions">
             {status?.isEnabled ? (
               <button type="button" disabled={busy} onClick={onDisable}>停用</button>
@@ -824,6 +873,116 @@ function CloudPanel({
       {error ? <p className="cloud-feedback error" role="alert">{error}</p> : null}
       {message && !error ? <p className="cloud-feedback ok" role="status"><Check size={14} />{message}</p> : null}
     </section>
+  );
+}
+
+type AuthModalProps = {
+  mode: AuthMode;
+  email: string;
+  password: string;
+  busy: boolean;
+  error: string | null;
+  onEmailChange: (email: string) => void;
+  onPasswordChange: (password: string) => void;
+  onModeChange: (mode: AuthMode) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+};
+
+function AuthModal({
+  mode,
+  email,
+  password,
+  busy,
+  error,
+  onEmailChange,
+  onPasswordChange,
+  onModeChange,
+  onClose,
+  onSubmit
+}: AuthModalProps) {
+  const isSignIn = mode === "signIn";
+  const passwordTooShort = password.length > 0 && password.length < 6;
+  const canSubmitAuth = email.trim().length > 0 && password.length >= 6 && !busy;
+  const title = isSignIn ? "登录" : "注册";
+  const authHelpText = passwordTooShort ? "密码至少 6 位" : "请输入邮箱和至少 6 位密码";
+
+  useEffect(() => {
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  function submitAuth(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (canSubmitAuth) {
+      onSubmit();
+    }
+  }
+
+  return (
+    <div className="auth-modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="auth-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="auth-modal-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="auth-modal-header">
+          <div>
+            <span className="eyebrow">云同步账号</span>
+            <h2 id="auth-modal-title">{title}</h2>
+          </div>
+          <button className="icon-button compact" type="button" aria-label="关闭" disabled={busy} onClick={onClose}>
+            <X size={15} />
+          </button>
+        </div>
+
+        <form className="auth-modal-form" onSubmit={submitAuth}>
+          <label className="field compact-field">
+            <span>邮箱</span>
+            <input
+              aria-label="云同步邮箱"
+              type="email"
+              value={email}
+              placeholder="learner@example.com"
+              autoComplete="email"
+              aria-describedby="auth-modal-help"
+              onChange={(event) => onEmailChange(event.target.value)}
+            />
+          </label>
+          <label className="field compact-field">
+            <span>密码</span>
+            <input
+              aria-label="云同步密码"
+              type="password"
+              value={password}
+              placeholder="至少 6 位"
+              autoComplete={isSignIn ? "current-password" : "new-password"}
+              aria-describedby="auth-modal-help"
+              onChange={(event) => onPasswordChange(event.target.value)}
+            />
+          </label>
+          <p className="cloud-helper" id="auth-modal-help">{authHelpText}</p>
+          {error ? <p className="cloud-feedback error" role="alert">{error}</p> : null}
+          <div className="auth-modal-actions">
+            <button className="secondary-button" type="button" disabled={busy} onClick={() => onModeChange(isSignIn ? "signUp" : "signIn")}>
+              {isSignIn ? "改为注册" : "已有账号登录"}
+            </button>
+            <button className="primary-button" type="submit" disabled={!canSubmitAuth}>
+              {isSignIn ? <LogIn size={16} /> : <Plus size={16} />}
+              {busy ? "提交中" : title}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
   );
 }
 
@@ -1058,6 +1217,42 @@ function formatDuration(ms: number | null | undefined): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function cloudStatusFromAuthState(
+  authState: AuthState,
+  current: CloudSyncStatus | null,
+  assumeCloudEnabled = false
+): CloudSyncStatus {
+  if (!authState.user) {
+    return {
+      mode: "local",
+      user: null,
+      isEntitled: false,
+      isEnabled: false,
+      isOnline: navigator.onLine,
+      isSyncing: false,
+      pendingRecordingUploads: 0,
+      lastSyncError: null
+    };
+  }
+
+  return cloudStatusForUser(authState.user, current, assumeCloudEnabled);
+}
+
+function cloudStatusForUser(user: CloudUser, current: CloudSyncStatus | null, assumeCloudEnabled = false): CloudSyncStatus {
+  const sameUser = current?.user?.uid === user.uid;
+  const isEnabled = sameUser ? current.isEnabled || assumeCloudEnabled : assumeCloudEnabled;
+  return {
+    mode: isEnabled ? "cloud" : "local",
+    user,
+    isEntitled: true,
+    isEnabled,
+    isOnline: navigator.onLine,
+    isSyncing: false,
+    pendingRecordingUploads: sameUser ? current.pendingRecordingUploads : 0,
+    lastSyncError: null
+  };
 }
 
 function errorMessage(caught: unknown): string {

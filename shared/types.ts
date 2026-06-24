@@ -74,6 +74,10 @@ export type AuthInput = {
   password: string;
 };
 
+export type CloudSyncUnsubscribe = () => void;
+
+export type CloudSyncChangeListener = () => void;
+
 export type VocabApi = {
   words: {
     list(filters?: WordListFilters): Promise<WordRecord[]>;
@@ -101,5 +105,6 @@ export type VocabApi = {
     enable(): Promise<CloudSyncStatus>;
     disable(): Promise<CloudSyncStatus>;
     refresh(): Promise<CloudSyncStatus>;
+    subscribe?(listener: CloudSyncChangeListener): Promise<CloudSyncUnsubscribe>;
   };
 };

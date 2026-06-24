@@ -85,6 +85,15 @@ export function VocabularyScreen({ repository, recordingFiles }: VocabularyScree
   }, [loadData]);
 
   useEffect(() => {
+    if (!repository.subscribe) {
+      return undefined;
+    }
+    return repository.subscribe(() => {
+      void loadData();
+    });
+  }, [loadData, repository]);
+
+  useEffect(() => {
     if (!selectedWord) {
       return;
     }

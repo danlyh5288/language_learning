@@ -2,7 +2,6 @@ import auth from "@react-native-firebase/auth";
 import firestore from "@react-native-firebase/firestore";
 import storage from "@react-native-firebase/storage";
 import {
-  cloudSyncEntitlementPath,
   cloudTagToRecord,
   cloudWordToRecord,
   extensionForMimeType,
@@ -10,7 +9,6 @@ import {
   TAG_COLORS,
   userTagsPath,
   userWordsPath,
-  type CloudEntitlementDocument,
   type CloudTagDocument,
   type CloudWordDocument
 } from "../../../shared/firebaseSchema";
@@ -27,6 +25,8 @@ import {
 import type {
   DeletedWordResult,
   MobileWordRecord,
+  RepositoryChangeListener,
+  RepositoryUnsubscribe,
   RecordingReplacementResult,
   SavedRecordingInput,
   SqlValue,
@@ -38,7 +38,6 @@ type UploadRow = Record<string, SqlValue>;
 
 export class FirebaseMobileSession {
   private readonly auth = auth();
-  private readonly firestore = firestore();
 
   constructor(private readonly queueDb: VocabDatabase) {}
 
@@ -53,7 +52,7 @@ export class FirebaseMobileSession {
 
   async signUp(input: AuthInput): Promise<AuthState> {
     const credential = await this.auth.createUserWithEmailAndPassword(input.email.trim(), input.password);
-    await credential.user.sendEmailVerification();
+    await credential.user.sendEmailVerification().catch(() => undefined);
     return { user: mapUser(credential.user) };
   }
 
@@ -73,30 +72,16 @@ export class FirebaseMobileSession {
 
   async getStatus(isEnabled: boolean): Promise<CloudSyncStatus> {
     const user = this.getCurrentUser();
-    const isEntitled = user?.emailVerified ? await this.isUserEntitled(user.uid) : false;
     return {
       mode: isEnabled ? "cloud" : "local",
       user,
-      isEntitled,
+      isEntitled: Boolean(user),
       isEnabled,
       isOnline: true,
       isSyncing: false,
-      pendingRecordingUploads: user?.emailVerified ? await countQueuedRecordings(this.queueDb, user.uid) : 0,
+      pendingRecordingUploads: user ? await countQueuedRecordings(this.queueDb, user.uid) : 0,
       lastSyncError: null
     };
-  }
-
-  async isUserEntitled(uid: string): Promise<boolean> {
-    const snapshot = await this.firestore.doc(cloudSyncEntitlementPath(uid)).get();
-    const data = snapshot.data() as CloudEntitlementDocument | undefined;
-    if (!data?.active) {
-      return false;
-    }
-    if (!data.expiresAt) {
-      return true;
-    }
-    const expiresAt = typeof data.expiresAt === "string" ? data.expiresAt : data.expiresAt.toDate?.().toISOString();
-    return expiresAt ? new Date(expiresAt).getTime() > Date.now() : true;
   }
 }
 
@@ -106,6 +91,23 @@ export class FirebaseVocabularyRepository implements VocabularyRepositoryApi {
   private readonly storage = storage();
 
   constructor(private readonly queueDb: VocabDatabase) {}
+
+  subscribe(listener: RepositoryChangeListener): RepositoryUnsubscribe {
+    const uid = requireUid(this.auth.currentUser);
+    const unsubscribeTags = this.firestore.collection(userTagsPath(uid)).where("deletedAt", "==", null).onSnapshot(
+      () => listener(),
+      () => listener()
+    );
+    const unsubscribeWords = this.firestore.collection(userWordsPath(uid)).where("deletedAt", "==", null).onSnapshot(
+      () => listener(),
+      () => listener()
+    );
+
+    return () => {
+      unsubscribeTags();
+      unsubscribeWords();
+    };
+  }
 
   async listWords(filters: WordListFilters = {}): Promise<MobileWordRecord[]> {
     const uid = requireUid(this.auth.currentUser);
