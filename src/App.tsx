@@ -201,6 +201,10 @@ export default function App() {
 
   const untaggedCount = useMemo(() => allWords.filter((word) => !word.tagId).length, [allWords]);
   const duplicateWord = useMemo(() => {
+    if (isSaving) {
+      return null;
+    }
+
     const normalized = draft.text.trim();
     if (!normalized) {
       return null;
@@ -210,7 +214,7 @@ export default function App() {
       allWords.find((word) => word.text === normalized && word.id !== selectedWord?.id) ??
       null
     );
-  }, [allWords, draft.text, selectedWord?.id]);
+  }, [allWords, draft.text, isSaving, selectedWord?.id]);
 
   const title = isCreating ? "新词条" : selectedWord?.text ?? "选择词条";
   const canSave = draft.text.trim().length > 0 && !isSaving;

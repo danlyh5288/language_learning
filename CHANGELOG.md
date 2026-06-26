@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.1.5 - 2026-06-26
+
+### Fixed
+
+- Suppress the duplicate-word warning while a realtime save is still pending.
+
+### Changed
+
+- Bump the macOS DMG package version to `0.1.5`.
+
 ## 0.1.4 - 2026-06-24
 
 ### Fixed
