@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CloudSyncStatus, VocabApi, WordRecord } from "../shared/types";
@@ -303,5 +303,46 @@ describe("Cloud auth panel", () => {
     mockApi.cloudListener?.();
 
     expect(await screen.findByText("远端")).toBeInTheDocument();
+  });
+
+  it("does not show the just-created word as a duplicate while a cloud save is still pending", async () => {
+    const user = userEvent.setup();
+    const createdWord: WordRecord = {
+      id: "word-created",
+      text: "谢谢",
+      tagId: null,
+      tagName: null,
+      tagColor: null,
+      toneNote: "",
+      audioDurationMs: null,
+      hasRecording: false,
+      createdAt: "2026-06-24T10:00:00.000Z",
+      updatedAt: "2026-06-24T10:00:00.000Z"
+    };
+    Object.assign(mockApi.status, {
+      user: { uid: "user-1", email: "learner@example.com", emailVerified: false },
+      mode: "cloud",
+      isEntitled: true,
+      isEnabled: true
+    } satisfies Partial<CloudSyncStatus>);
+    mockApi.wordsList.mockResolvedValue([]);
+    mockApi.wordsCreate.mockImplementation(async () => new Promise<WordRecord>(() => undefined));
+
+    render(<App />);
+
+    await waitFor(() => expect(mockApi.subscribe).toHaveBeenCalledTimes(1));
+    await user.click(await screen.findByRole("button", { name: "添加词条" }));
+    await user.type(screen.getByPlaceholderText("例如：侬好"), "谢谢");
+    await user.click(screen.getByRole("button", { name: "保存" }));
+
+    expect(await screen.findByRole("button", { name: /保存中/ })).toBeDisabled();
+
+    mockApi.wordsList.mockResolvedValue([createdWord]);
+    await act(async () => {
+      mockApi.cloudListener?.();
+    });
+
+    await waitFor(() => expect(mockApi.wordsList).toHaveBeenCalledTimes(4));
+    expect(screen.queryByText("已有同名词条：谢谢")).not.toBeInTheDocument();
   });
 });
