@@ -117,6 +117,27 @@ Firebase project files:
 
 For desktop/Web builds, copy `.env.example` to `.env.local` and fill in the Firebase Web app config from Firebase Console. `.env.local` is ignored by Git.
 Enable the Email/Password sign-in provider in Firebase Auth and configure the verification email template. New email/password accounts receive a verification email after registration, but verification does not block cloud sync.
+Set `VITE_FIREBASE_FUNCTIONS_BASE_URL` only when the app should call a local emulator or custom Functions URL. Otherwise the app derives `https://us-central1-{projectId}.cloudfunctions.net`.
+
+## Monitor / Service Health
+
+The developer diagnostics panel checks the optional cloud-sync chain and can submit sanitized health snapshots to OpenObserve through Cloud Functions.
+
+- `monitorHealth` is a public GET endpoint for Firebase Functions availability checks.
+- `monitorIngest` requires a Firebase ID token, recomputes an anonymous UID hash server-side, removes unapproved fields, and forwards the event to OpenObserve.
+- OpenObserve credentials must stay in Functions configuration, never in the desktop or mobile app.
+
+Functions environment/secrets for OpenObserve:
+
+```bash
+OPENOBSERVE_ENDPOINT=https://your-openobserve-host
+OPENOBSERVE_ORG=default
+OPENOBSERVE_STREAM=pronunciation_vault_health
+firebase functions:secrets:set OPENOBSERVE_USERNAME
+firebase functions:secrets:set OPENOBSERVE_PASSWORD
+```
+
+Configure the OpenObserve stream retention to 7 days.
 
 For mobile builds, download the Firebase native app config files and place them locally:
 

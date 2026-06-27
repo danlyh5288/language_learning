@@ -286,6 +286,144 @@ button {
   padding: 0 12px;
 }
 
+.monitor-modal {
+  display: grid;
+  gap: 14px;
+  width: min(620px, 100%);
+  max-height: min(720px, calc(100vh - 40px));
+  overflow: auto;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 22px 58px rgba(24, 33, 31, 0.2);
+}
+
+.monitor-summary {
+  display: grid;
+  grid-template-columns: 10px auto 1fr;
+  align-items: center;
+  gap: 9px;
+  min-height: 36px;
+  padding: 0 10px;
+  color: var(--muted);
+  background: #f7faf8;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.monitor-summary strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.monitor-summary span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.monitor-grid {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 7px 12px;
+  padding: 10px;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12px;
+}
+
+.monitor-grid strong {
+  min-width: 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.monitor-checks {
+  display: grid;
+  gap: 8px;
+}
+
+.monitor-check-row {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) 64px;
+  align-items: start;
+  gap: 10px;
+  min-height: 58px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fbfdfc;
+}
+
+.monitor-check-row strong {
+  display: block;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.monitor-check-row p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.monitor-check-row code {
+  display: inline-block;
+  margin-top: 5px;
+  padding: 2px 5px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-radius: 5px;
+  font-size: 11px;
+}
+
+.monitor-check-row > span:last-child {
+  color: var(--faint);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.monitor-empty {
+  min-height: 72px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.health-dot {
+  width: 10px;
+  height: 10px;
+  margin-top: 3px;
+  border-radius: 50%;
+  background: var(--faint);
+}
+
+.health-dot.ok {
+  background: var(--primary);
+}
+
+.health-dot.degraded {
+  background: var(--warning);
+}
+
+.health-dot.down {
+  background: var(--danger);
+}
+
 .tag-nav {
   display: grid;
   gap: 6px;

@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { CloudSyncStatus, VocabApi, WordRecord } from "../shared/types";
+import type { CloudSyncStatus, MonitorSnapshot, VocabApi, WordRecord } from "../shared/types";
 
 const mockApi = vi.hoisted(() => {
   const signedInUser = { uid: "user-1", email: "learner@example.com", emailVerified: false };
@@ -37,7 +37,37 @@ const mockApi = vi.hoisted(() => {
     enable: vi.fn(async () => status),
     disable: vi.fn(async () => status),
     refresh: vi.fn(async () => status),
-    subscribe: vi.fn()
+    subscribe: vi.fn(),
+    getMonitorSnapshot: vi.fn(async () => ({
+      schemaVersion: 1,
+      appVersion: "test",
+      platform: "web",
+      checkedAt: "2026-06-24T10:00:00.000Z",
+      mode: "cloud",
+      uidHash: "hash-1",
+      isOnline: true,
+      pendingRecordingUploads: 1,
+      failedRecordingUploads: 0,
+      checks: [
+        {
+          service: "auth",
+          status: "ok",
+          latencyMs: 4,
+          checkedAt: "2026-06-24T10:00:00.000Z",
+          message: "active Firebase auth session",
+          errorCode: null
+        },
+        {
+          service: "functions",
+          status: "degraded",
+          latencyMs: 120,
+          checkedAt: "2026-06-24T10:00:00.000Z",
+          message: "monitorHealth returned HTTP 503",
+          errorCode: "http-503"
+        }
+      ]
+    } satisfies MonitorSnapshot)),
+    submitMonitorSnapshot: vi.fn(async () => ({ accepted: true }))
   };
 });
 
@@ -70,6 +100,10 @@ vi.mock("./api", () => ({
       disable: mockApi.disable,
       refresh: mockApi.refresh,
       subscribe: mockApi.subscribe
+    },
+    monitor: {
+      getSnapshot: mockApi.getMonitorSnapshot,
+      submitSnapshot: mockApi.submitMonitorSnapshot
     }
   } satisfies VocabApi,
   isElectronRuntime: false
@@ -142,6 +176,8 @@ describe("Cloud auth panel", () => {
         mockApi.cloudListener = null;
       });
     });
+    mockApi.getMonitorSnapshot.mockClear();
+    mockApi.submitMonitorSnapshot.mockClear();
   });
 
   it("opens login modal and enables submission only for valid input", async () => {
@@ -303,6 +339,31 @@ describe("Cloud auth panel", () => {
     mockApi.cloudListener?.();
 
     expect(await screen.findByText("远端")).toBeInTheDocument();
+  });
+
+  it("opens developer diagnostics and submits the current health snapshot", async () => {
+    const user = userEvent.setup();
+    Object.assign(mockApi.status, {
+      user: { uid: "user-1", email: "learner@example.com", emailVerified: true },
+      mode: "cloud",
+      isEntitled: true,
+      isEnabled: true
+    } satisfies Partial<CloudSyncStatus>);
+
+    render(<App />);
+
+    const account = await screen.findByRole("region", { name: "账户" });
+    await user.click(within(account).getByRole("button", { name: "诊断" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Service health" });
+    expect(await within(dialog).findByText("degraded")).toBeInTheDocument();
+    expect(within(dialog).getByText("Functions")).toBeInTheDocument();
+    expect(within(dialog).getByText("http-503")).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("button", { name: "上报" }));
+
+    expect(mockApi.submitMonitorSnapshot).toHaveBeenCalledWith(await mockApi.getMonitorSnapshot.mock.results[0].value);
+    expect(await within(dialog).findByText("诊断已上报")).toBeInTheDocument();
   });
 
   it("does not show the just-created word as a duplicate while a cloud save is still pending", async () => {

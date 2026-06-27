@@ -1,4 +1,7 @@
 import {
+  type HealthCheckResult,
+  type HealthStatus,
+  type MonitorSnapshot,
   type RecordingSaveInput,
   type TagRecord,
   UNTAGGED_FILTER_ID,
@@ -71,6 +74,16 @@ function createLazyFirebaseApi(localApi: VocabApi): VocabApi {
       disable: async () => (await getCloudApi()).cloudSync?.disable() ?? Promise.reject(new Error("云同步不可用")),
       refresh: async () => (await getCloudApi()).cloudSync?.refresh() ?? Promise.reject(new Error("云同步不可用")),
       subscribe: async (listener) => (await getCloudApi()).cloudSync?.subscribe?.(listener) ?? (() => undefined)
+    },
+    monitor: {
+      getSnapshot: async () => {
+        if (!shouldUseCloud() && !cloudApiPromise) {
+          return localMonitorSnapshot();
+        }
+        return (await getCloudApi()).monitor?.getSnapshot() ?? localMonitorSnapshot();
+      },
+      submitSnapshot: async (snapshot: MonitorSnapshot) =>
+        (await getCloudApi()).monitor?.submitSnapshot(snapshot) ?? Promise.reject(new Error("诊断上报不可用"))
     }
   };
 }
@@ -85,6 +98,40 @@ function localCloudStatus() {
     isSyncing: false,
     pendingRecordingUploads: 0,
     lastSyncError: null
+  };
+}
+
+function localMonitorSnapshot(): MonitorSnapshot {
+  const checkedAt = new Date().toISOString();
+  const checks: HealthCheckResult[] = [
+    localHealthCheck("auth", "unknown", "no cloud user is signed in"),
+    localHealthCheck("firestore", "unknown", "cloud sync is not active"),
+    localHealthCheck("storage", "unknown", "cloud sync is not active"),
+    localHealthCheck("functions", "unknown", "cloud sync is not active"),
+    localHealthCheck("recordingQueue", "ok", "recording upload queue is empty")
+  ];
+  return {
+    schemaVersion: 1,
+    appVersion: import.meta.env.VITE_APP_VERSION?.trim() || "dev",
+    platform: window.vocabApi ? "electron" : "web",
+    checkedAt,
+    mode: "local",
+    uidHash: null,
+    isOnline: navigator.onLine,
+    pendingRecordingUploads: 0,
+    failedRecordingUploads: 0,
+    checks
+  };
+}
+
+function localHealthCheck(service: HealthCheckResult["service"], status: HealthStatus, message: string): HealthCheckResult {
+  return {
+    service,
+    status,
+    latencyMs: null,
+    checkedAt: new Date().toISOString(),
+    message,
+    errorCode: null
   };
 }
 

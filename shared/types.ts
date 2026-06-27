@@ -83,6 +83,41 @@ export type CloudSyncUnsubscribe = () => void;
 
 export type CloudSyncChangeListener = () => void;
 
+export type HealthStatus = "ok" | "degraded" | "down" | "unknown";
+
+export type HealthService =
+  | "auth"
+  | "firestore"
+  | "storage"
+  | "functions"
+  | "recordingQueue";
+
+export type HealthCheckResult = {
+  service: HealthService;
+  status: HealthStatus;
+  latencyMs: number | null;
+  checkedAt: string;
+  message: string;
+  errorCode: string | null;
+};
+
+export type MonitorSnapshot = {
+  schemaVersion: 1;
+  appVersion: string;
+  platform: "electron" | "web";
+  checkedAt: string;
+  mode: CloudMode;
+  uidHash: string | null;
+  isOnline: boolean;
+  pendingRecordingUploads: number;
+  failedRecordingUploads: number;
+  checks: HealthCheckResult[];
+};
+
+export type MonitorSubmitResult = {
+  accepted: boolean;
+};
+
 export type VocabApi = {
   words: {
     list(filters?: WordListFilters): Promise<WordRecord[]>;
@@ -112,5 +147,9 @@ export type VocabApi = {
     disable(): Promise<CloudSyncStatus>;
     refresh(): Promise<CloudSyncStatus>;
     subscribe?(listener: CloudSyncChangeListener): Promise<CloudSyncUnsubscribe>;
+  };
+  monitor?: {
+    getSnapshot(): Promise<MonitorSnapshot>;
+    submitSnapshot(snapshot: MonitorSnapshot): Promise<MonitorSubmitResult>;
   };
 };

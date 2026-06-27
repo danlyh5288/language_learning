@@ -1,4 +1,5 @@
 import {
+  Activity,
   AlertCircle,
   BookOpen,
   Check,
@@ -27,6 +28,8 @@ import {
   type CloudUser,
   type TagRecord,
   type CloudSyncStatus,
+  type HealthStatus,
+  type MonitorSnapshot,
   UNTAGGED_FILTER_ID,
   type WordInput,
   type WordRecord
@@ -73,6 +76,11 @@ export default function App() {
   const [isCloudBusy, setIsCloudBusy] = useState(false);
   const [cloudMessage, setCloudMessage] = useState<string | null>(null);
   const [cloudError, setCloudError] = useState<string | null>(null);
+  const [isMonitorOpen, setIsMonitorOpen] = useState(false);
+  const [monitorSnapshot, setMonitorSnapshot] = useState<MonitorSnapshot | null>(null);
+  const [isMonitorBusy, setIsMonitorBusy] = useState(false);
+  const [monitorMessage, setMonitorMessage] = useState<string | null>(null);
+  const [monitorError, setMonitorError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const listAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -564,6 +572,56 @@ export default function App() {
     }
   }
 
+  async function refreshMonitor() {
+    if (!api.monitor) {
+      setMonitorError("诊断不可用");
+      return null;
+    }
+    setIsMonitorBusy(true);
+    setMonitorError(null);
+    setMonitorMessage(null);
+    try {
+      const snapshot = await api.monitor.getSnapshot();
+      setMonitorSnapshot(snapshot);
+      setMonitorMessage("诊断已刷新");
+      return snapshot;
+    } catch (caught) {
+      setMonitorError(errorMessage(caught));
+      return null;
+    } finally {
+      setIsMonitorBusy(false);
+    }
+  }
+
+  async function submitMonitorSnapshot() {
+    if (!api.monitor) {
+      setMonitorError("诊断上报不可用");
+      return;
+    }
+    setIsMonitorBusy(true);
+    setMonitorError(null);
+    setMonitorMessage(null);
+    try {
+      const snapshot = monitorSnapshot ?? await api.monitor.getSnapshot();
+      setMonitorSnapshot(snapshot);
+      await api.monitor.submitSnapshot(snapshot);
+      setMonitorMessage("诊断已上报");
+    } catch (caught) {
+      setMonitorError(errorMessage(caught));
+    } finally {
+      setIsMonitorBusy(false);
+    }
+  }
+
+  function openMonitor() {
+    setIsMonitorOpen(true);
+    setMonitorError(null);
+    setMonitorMessage(null);
+    if (!monitorSnapshot) {
+      void refreshMonitor();
+    }
+  }
+
   return (
     <>
       <main className="app-shell">
@@ -626,6 +684,7 @@ export default function App() {
           onEnable={() => void enableCloudSync()}
           onDisable={() => void disableCloudSync()}
           onRefresh={() => void refreshCloudSync()}
+          onOpenMonitor={openMonitor}
         />
       </aside>
 
@@ -817,6 +876,17 @@ export default function App() {
         onSubmit={authMode === "signIn" ? () => void signIn() : () => void signUp()}
       />
     ) : null}
+    {isMonitorOpen ? (
+      <MonitorModal
+        snapshot={monitorSnapshot}
+        busy={isMonitorBusy}
+        message={monitorMessage}
+        error={monitorError}
+        onClose={() => setIsMonitorOpen(false)}
+        onRefresh={() => void refreshMonitor()}
+        onSubmit={() => void submitMonitorSnapshot()}
+      />
+    ) : null}
     </>
   );
 }
@@ -840,6 +910,7 @@ type AccountDockProps = {
   onEnable: () => void;
   onDisable: () => void;
   onRefresh: () => void;
+  onOpenMonitor: () => void;
 };
 
 function AccountDock({
@@ -852,7 +923,8 @@ function AccountDock({
   onSignOut,
   onEnable,
   onDisable,
-  onRefresh
+  onRefresh,
+  onOpenMonitor
 }: AccountDockProps) {
   const signedIn = Boolean(status?.user);
   const emailVerified = status?.user?.emailVerified ?? false;
@@ -902,6 +974,10 @@ function AccountDock({
             <button type="button" disabled={busy} aria-label="刷新云同步" onClick={onRefresh}>
               <RefreshCw size={14} />
             </button>
+            <button type="button" disabled={busy} onClick={onOpenMonitor}>
+              <Activity size={14} />
+              诊断
+            </button>
             <button type="button" disabled={busy} aria-label="退出云端账号" onClick={onSignOut}>
               <LogOut size={14} />
             </button>
@@ -911,6 +987,110 @@ function AccountDock({
       {error ? <p className="cloud-feedback error" role="alert">{error}</p> : null}
       {message && !error ? <p className="cloud-feedback ok" role="status"><Check size={14} />{message}</p> : null}
     </section>
+  );
+}
+
+type MonitorModalProps = {
+  snapshot: MonitorSnapshot | null;
+  busy: boolean;
+  message: string | null;
+  error: string | null;
+  onClose: () => void;
+  onRefresh: () => void;
+  onSubmit: () => void;
+};
+
+function MonitorModal({
+  snapshot,
+  busy,
+  message,
+  error,
+  onClose,
+  onRefresh,
+  onSubmit
+}: MonitorModalProps) {
+  const overallStatus = snapshot ? summarizeMonitorStatus(snapshot) : "unknown";
+
+  useEffect(() => {
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  return (
+    <div className="auth-modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="monitor-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="monitor-modal-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="auth-modal-header">
+          <div>
+            <span className="eyebrow">云同步诊断</span>
+            <h2 id="monitor-modal-title">Service health</h2>
+          </div>
+          <button className="icon-button compact" type="button" aria-label="关闭" disabled={busy} onClick={onClose}>
+            <X size={15} />
+          </button>
+        </div>
+
+        <div className="monitor-summary">
+          <span className={`health-dot ${overallStatus}`} />
+          <strong>{healthStatusLabel(overallStatus)}</strong>
+          <span>{snapshot ? new Date(snapshot.checkedAt).toLocaleString() : "尚未检查"}</span>
+        </div>
+
+        {snapshot ? (
+          <div className="monitor-grid">
+            <span>mode</span>
+            <strong>{snapshot.mode}</strong>
+            <span>platform</span>
+            <strong>{snapshot.platform}</strong>
+            <span>uid hash</span>
+            <strong>{snapshot.uidHash ?? "none"}</strong>
+            <span>recordings</span>
+            <strong>{snapshot.pendingRecordingUploads} pending · {snapshot.failedRecordingUploads} failed</strong>
+          </div>
+        ) : null}
+
+        <div className="monitor-checks">
+          {snapshot?.checks.map((check) => (
+            <div className="monitor-check-row" key={check.service}>
+              <span className={`health-dot ${check.status}`} />
+              <div>
+                <strong>{serviceLabel(check.service)}</strong>
+                <p>{check.message}</p>
+                {check.errorCode ? <code>{check.errorCode}</code> : null}
+              </div>
+              <span>{check.latencyMs === null ? "n/a" : `${check.latencyMs} ms`}</span>
+            </div>
+          )) ?? (
+            <div className="monitor-empty">点击刷新获取当前健康快照</div>
+          )}
+        </div>
+
+        {error ? <p className="cloud-feedback error" role="alert">{error}</p> : null}
+        {message && !error ? <p className="cloud-feedback ok" role="status"><Check size={14} />{message}</p> : null}
+
+        <div className="auth-modal-actions">
+          <button className="secondary-button" type="button" disabled={busy} onClick={onRefresh}>
+            <RefreshCw size={15} />
+            {busy ? "刷新中" : "刷新"}
+          </button>
+          <button className="primary-button" type="button" disabled={busy || !snapshot} onClick={onSubmit}>
+            <Cloud size={15} />
+            {busy ? "上报中" : "上报"}
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -1255,6 +1435,50 @@ function formatDuration(ms: number | null | undefined): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function summarizeMonitorStatus(snapshot: MonitorSnapshot): HealthStatus {
+  const statuses = snapshot.checks.map((check) => check.status);
+  if (statuses.includes("down")) {
+    return "down";
+  }
+  if (statuses.includes("degraded")) {
+    return "degraded";
+  }
+  if (statuses.includes("unknown")) {
+    return "unknown";
+  }
+  return "ok";
+}
+
+function healthStatusLabel(status: HealthStatus): string {
+  switch (status) {
+    case "ok":
+      return "healthy";
+    case "degraded":
+      return "degraded";
+    case "down":
+      return "down";
+    case "unknown":
+      return "unknown";
+  }
+}
+
+function serviceLabel(service: string): string {
+  switch (service) {
+    case "auth":
+      return "Auth";
+    case "firestore":
+      return "Firestore";
+    case "storage":
+      return "Storage";
+    case "functions":
+      return "Functions";
+    case "recordingQueue":
+      return "Recording queue";
+    default:
+      return service;
+  }
 }
 
 function cloudStatusFromAuthState(
