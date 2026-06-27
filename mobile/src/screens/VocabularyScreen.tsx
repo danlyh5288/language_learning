@@ -110,13 +110,17 @@ export function VocabularyScreen({ repository, recordingFiles }: VocabularyScree
 
   const untaggedCount = useMemo(() => allWords.filter((word) => !word.tagId).length, [allWords]);
   const duplicateWord = useMemo(() => {
+    if (isSaving) {
+      return null;
+    }
+
     const normalized = draft.text.trim();
     if (!normalized) {
       return null;
     }
 
     return allWords.find((word) => word.text === normalized && word.id !== selectedWord?.id) ?? null;
-  }, [allWords, draft.text, selectedWord?.id]);
+  }, [allWords, draft.text, isSaving, selectedWord?.id]);
   const canSave = draft.text.trim().length > 0 && !isSaving;
 
   async function discardPendingRecording() {

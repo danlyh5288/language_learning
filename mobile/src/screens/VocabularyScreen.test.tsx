@@ -212,6 +212,24 @@ describe("VocabularyScreen", () => {
     expect(await view.findByText("远端词")).toBeTruthy();
   });
 
+  it("does not show the just-created word as a duplicate while a save is still pending", async () => {
+    const repository = new FakeRepository();
+    jest.spyOn(repository, "createWord").mockImplementation(async () => new Promise<MobileWordRecord>(() => undefined));
+    const view = await render(<VocabularyScreen repository={repository} recordingFiles={createFileStore()} />);
+
+    await fireEvent.press(view.getByLabelText("添加词条"));
+    await view.findByLabelText("词条");
+    await fireEvent.changeText(view.getByLabelText("词条"), "谢谢");
+    await fireEvent.press(view.getByText("保存"));
+
+    repository.words.push(seedWord({ id: "word-created", text: "谢谢" }));
+    await act(async () => {
+      repository.emitChange();
+    });
+
+    expect(view.queryByText("已有同名词条：谢谢")).toBeNull();
+  });
+
   it("creates a word with a new tag and filters with #tag search", async () => {
     const repository = new FakeRepository();
 
