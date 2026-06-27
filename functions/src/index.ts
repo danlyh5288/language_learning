@@ -13,8 +13,6 @@ initializeApp();
 
 const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
-const openObserveUsername = defineSecret("OPENOBSERVE_USERNAME");
-const openObservePassword = defineSecret("OPENOBSERVE_PASSWORD");
 
 const HEALTH_SERVICES = new Set(["auth", "firestore", "storage", "functions", "recordingQueue"]);
 const HEALTH_STATUSES = new Set(["ok", "degraded", "down", "unknown"]);
@@ -117,8 +115,7 @@ export const monitorHealth = onRequest(
 
 export const monitorIngest = onRequest(
   {
-    cors: true,
-    secrets: [openObserveUsername, openObservePassword]
+    cors: true
   },
   async (request, response) => {
     if (request.method !== "POST") {
@@ -144,8 +141,7 @@ export const monitorIngest = onRequest(
 
     const config = openObserveConfig();
     if (!config) {
-      logger.warn("OpenObserve monitor ingest is not configured");
-      response.status(503).json({ accepted: false, error: "OpenObserve is not configured" });
+      response.status(200).json({ accepted: false, reason: "not_configured" });
       return;
     }
 
@@ -194,8 +190,8 @@ function openObserveConfig(): {
   const endpoint = normalizeEndpoint(process.env.OPENOBSERVE_ENDPOINT);
   const org = safePathSegment(process.env.OPENOBSERVE_ORG ?? "default");
   const stream = safePathSegment(process.env.OPENOBSERVE_STREAM ?? "pronunciation_vault_health");
-  const username = openObserveUsername.value();
-  const password = openObservePassword.value();
+  const username = process.env.OPENOBSERVE_USERNAME?.trim() ?? "";
+  const password = process.env.OPENOBSERVE_PASSWORD?.trim() ?? "";
 
   if (!endpoint || !org || !stream || !username || !password) {
     return null;

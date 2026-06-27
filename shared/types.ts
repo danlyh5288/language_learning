@@ -116,6 +116,7 @@ export type MonitorSnapshot = {
 
 export type MonitorSubmitResult = {
   accepted: boolean;
+  reason?: "not_configured";
 };
 
 export type VocabApi = {

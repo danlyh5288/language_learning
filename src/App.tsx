@@ -604,8 +604,8 @@ export default function App() {
     try {
       const snapshot = monitorSnapshot ?? await api.monitor.getSnapshot();
       setMonitorSnapshot(snapshot);
-      await api.monitor.submitSnapshot(snapshot);
-      setMonitorMessage("诊断已上报");
+      const result = await api.monitor.submitSnapshot(snapshot);
+      setMonitorMessage(result.accepted ? "诊断已上报" : "OpenObserve 未配置，诊断未上报");
     } catch (caught) {
       setMonitorError(errorMessage(caught));
     } finally {

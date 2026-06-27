@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { CloudSyncStatus, MonitorSnapshot, VocabApi, WordRecord } from "../shared/types";
+import type { CloudSyncStatus, MonitorSnapshot, MonitorSubmitResult, VocabApi, WordRecord } from "../shared/types";
 
 const mockApi = vi.hoisted(() => {
   const signedInUser = { uid: "user-1", email: "learner@example.com", emailVerified: false };
@@ -67,7 +67,7 @@ const mockApi = vi.hoisted(() => {
         }
       ]
     } satisfies MonitorSnapshot)),
-    submitMonitorSnapshot: vi.fn(async () => ({ accepted: true }))
+    submitMonitorSnapshot: vi.fn(async () => ({ accepted: true }) as MonitorSubmitResult)
   };
 });
 
@@ -364,6 +364,28 @@ describe("Cloud auth panel", () => {
 
     expect(mockApi.submitMonitorSnapshot).toHaveBeenCalledWith(await mockApi.getMonitorSnapshot.mock.results[0].value);
     expect(await within(dialog).findByText("诊断已上报")).toBeInTheDocument();
+  });
+
+  it("treats missing OpenObserve config as a skipped diagnostics upload", async () => {
+    const user = userEvent.setup();
+    mockApi.submitMonitorSnapshot.mockResolvedValueOnce({ accepted: false, reason: "not_configured" });
+    Object.assign(mockApi.status, {
+      user: { uid: "user-1", email: "learner@example.com", emailVerified: true },
+      mode: "cloud",
+      isEntitled: true,
+      isEnabled: true
+    } satisfies Partial<CloudSyncStatus>);
+
+    render(<App />);
+
+    const account = await screen.findByRole("region", { name: "账户" });
+    await user.click(within(account).getByRole("button", { name: "诊断" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Service health" });
+    await user.click(await within(dialog).findByRole("button", { name: "上报" }));
+
+    expect(await within(dialog).findByText("OpenObserve 未配置，诊断未上报")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("does not show the just-created word as a duplicate while a cloud save is still pending", async () => {

@@ -107,7 +107,7 @@ describe("Firebase cloud API", () => {
     firebaseMocks.signInWithEmailAndPassword.mockResolvedValue({ user: firebaseMocks.auth.currentUser });
     firebaseMocks.signOut.mockClear();
     firebaseMocks.uploadBytes.mockClear();
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 })));
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ accepted: true }), { status: 200 })));
   });
 
   it("treats a signed-in unverified user as cloud-capable", async () => {
@@ -323,7 +323,7 @@ describe("Firebase cloud API", () => {
     const api = createFirebaseAwareApi(createLocalApi());
     const snapshot = await api.monitor?.getSnapshot();
 
-    await expect(api.monitor?.submitSnapshot(snapshot!)).resolves.toEqual({ ok: true });
+    await expect(api.monitor?.submitSnapshot(snapshot!)).resolves.toEqual({ accepted: true });
 
     expect(fetch).toHaveBeenLastCalledWith(
       "https://us-central1-test-project.cloudfunctions.net/monitorIngest",

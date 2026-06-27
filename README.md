@@ -125,16 +125,17 @@ The developer diagnostics panel checks the optional cloud-sync chain and can sub
 
 - `monitorHealth` is a public GET endpoint for Firebase Functions availability checks.
 - `monitorIngest` requires a Firebase ID token, recomputes an anonymous UID hash server-side, removes unapproved fields, and forwards the event to OpenObserve.
-- OpenObserve credentials must stay in Functions configuration, never in the desktop or mobile app.
+- OpenObserve credentials must stay in Functions runtime configuration, never in the desktop or mobile app.
+- If OpenObserve is not configured, `monitorIngest` returns `{ accepted: false, reason: "not_configured" }` and the app continues normally.
 
-Functions environment/secrets for OpenObserve:
+Optional Functions environment for OpenObserve:
 
 ```bash
 OPENOBSERVE_ENDPOINT=https://your-openobserve-host
 OPENOBSERVE_ORG=default
 OPENOBSERVE_STREAM=pronunciation_vault_health
-firebase functions:secrets:set OPENOBSERVE_USERNAME
-firebase functions:secrets:set OPENOBSERVE_PASSWORD
+OPENOBSERVE_USERNAME=your-openobserve-user
+OPENOBSERVE_PASSWORD=your-openobserve-password
 ```
 
 Configure the OpenObserve stream retention to 7 days.
