@@ -10,6 +10,7 @@ const firebaseMocks = vi.hoisted(() => {
       metadata: {
         lastSignInTime: new Date().toISOString()
       },
+      getIdToken: vi.fn(async () => "firebase-token"),
       reload: vi.fn(async () => undefined)
     }
   };
@@ -48,6 +49,7 @@ vi.mock("firebase/firestore", () => ({
   getDoc: firebaseMocks.getDoc,
   getDocs: firebaseMocks.getDocs,
   initializeFirestore: vi.fn(() => ({})),
+  limit: vi.fn((count: number) => ({ limit: count })),
   onSnapshot: firebaseMocks.onSnapshot,
   persistentLocalCache: vi.fn(() => ({})),
   persistentSingleTabManager: vi.fn(() => ({})),
@@ -85,6 +87,7 @@ describe("Firebase cloud API", () => {
       metadata: {
         lastSignInTime: new Date().toISOString()
       },
+      getIdToken: vi.fn(async () => "firebase-token"),
       reload: vi.fn(async () => undefined)
     };
     firebaseMocks.getDoc.mockClear();
@@ -104,6 +107,7 @@ describe("Firebase cloud API", () => {
     firebaseMocks.signInWithEmailAndPassword.mockResolvedValue({ user: firebaseMocks.auth.currentUser });
     firebaseMocks.signOut.mockClear();
     firebaseMocks.uploadBytes.mockClear();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 })));
   });
 
   it("treats a signed-in unverified user as cloud-capable", async () => {
@@ -286,6 +290,51 @@ describe("Firebase cloud API", () => {
 
     expect(firebaseMocks.signOut).toHaveBeenCalledTimes(1);
     expect(localStorage.getItem("pronunciation-vault-cloud-mode")).toBe("local");
+  });
+
+  it("builds a cloud monitor snapshot without exposing raw user identifiers", async () => {
+    localStorage.setItem("pronunciation-vault-cloud-mode", "cloud");
+    const { createFirebaseAwareApi } = await import("./firebaseCloudApi");
+    const api = createFirebaseAwareApi(createLocalApi());
+
+    const snapshot = await api.monitor?.getSnapshot();
+
+    expect(snapshot).toMatchObject({
+      schemaVersion: 1,
+      mode: "cloud",
+      platform: "web",
+      pendingRecordingUploads: 0,
+      failedRecordingUploads: 0
+    });
+    expect(snapshot?.uidHash).toMatch(/^[a-f0-9]{32}$|^fnv-[a-f0-9]{8}$/);
+    expect(JSON.stringify(snapshot)).not.toContain("user-1");
+    expect(JSON.stringify(snapshot)).not.toContain("learner@example.com");
+    expect(snapshot?.checks.map((check) => check.service)).toEqual([
+      "auth",
+      "firestore",
+      "storage",
+      "functions",
+      "recordingQueue"
+    ]);
+  });
+
+  it("submits monitor snapshots through the authenticated function proxy", async () => {
+    const { createFirebaseAwareApi } = await import("./firebaseCloudApi");
+    const api = createFirebaseAwareApi(createLocalApi());
+    const snapshot = await api.monitor?.getSnapshot();
+
+    await expect(api.monitor?.submitSnapshot(snapshot!)).resolves.toEqual({ ok: true });
+
+    expect(fetch).toHaveBeenLastCalledWith(
+      "https://us-central1-test-project.cloudfunctions.net/monitorIngest",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          authorization: "Bearer firebase-token",
+          "content-type": "application/json"
+        })
+      })
+    );
   });
 });
 

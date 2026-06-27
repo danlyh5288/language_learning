@@ -16,6 +16,7 @@ import {
   getDoc,
   getDocs,
   initializeFirestore,
+  limit,
   onSnapshot,
   persistentLocalCache,
   persistentSingleTabManager,
@@ -46,6 +47,11 @@ import {
   type CloudSyncStatus,
   type CloudSyncUnsubscribe,
   type CloudUser,
+  type HealthCheckResult,
+  type HealthService,
+  type HealthStatus,
+  type MonitorSnapshot,
+  type MonitorSubmitResult,
   type RecordingSaveInput,
   type TagRecord,
   UNTAGGED_FILTER_ID,
@@ -78,6 +84,13 @@ type FirebaseRuntime = {
   auth: Auth;
   db: Firestore;
   storage: FirebaseStorage;
+  functionsBaseUrl: string;
+};
+
+type HealthCheckOutcome = {
+  status: HealthStatus;
+  message: string;
+  errorCode?: string | null;
 };
 
 let runtimePromise: Promise<FirebaseRuntime> | null = null;
@@ -142,6 +155,10 @@ export function createFirebaseAwareApi(localApi: VocabApi): VocabApi {
       disable: () => cloud.disableCloudSync(),
       refresh: () => cloud.refresh(),
       subscribe: (listener: CloudSyncChangeListener) => cloud.subscribe(listener)
+    },
+    monitor: {
+      getSnapshot: () => cloud.getMonitorSnapshot(),
+      submitSnapshot: (snapshot: MonitorSnapshot) => cloud.submitMonitorSnapshot(snapshot)
     }
   };
 }
@@ -241,6 +258,138 @@ class FirebaseCloudApi {
       await this.processRecordingQueue(user.uid);
     }
     return this.getStatus();
+  }
+
+  async getMonitorSnapshot(): Promise<MonitorSnapshot> {
+    const checkedAt = new Date().toISOString();
+    let uid: string | null = null;
+    let mode = this.isCloudEnabled() ? "cloud" as const : "local" as const;
+    let pendingRecordingUploads = 0;
+    let failedRecordingUploads = 0;
+
+    const authCheck = await timedHealthCheck("auth", async () => {
+      const { auth } = await getRuntime();
+      const user = await getActiveAuthUser(auth);
+      uid = user?.uid ?? null;
+      if (!user) {
+        return {
+          status: this.isCloudEnabled() ? "down" : "unknown",
+          message: this.isCloudEnabled() ? "cloud mode is enabled but no active auth user was found" : "no cloud user is signed in"
+        };
+      }
+      await user.getIdToken(false);
+      return { status: "ok", message: "active Firebase auth session" };
+    });
+
+    if (uid) {
+      const queued = await listQueuedRecordings(uid).catch(() => []);
+      pendingRecordingUploads = queued.length;
+      failedRecordingUploads = queued.filter((upload) => Boolean(upload.error)).length;
+    }
+
+    if (!uid && mode === "cloud") {
+      mode = "local";
+    }
+
+    const checks = [
+      authCheck,
+      await this.checkFirestore(uid),
+      await this.checkStorage(uid, pendingRecordingUploads, failedRecordingUploads),
+      await this.checkFunctions(),
+      recordingQueueHealthCheck(pendingRecordingUploads, failedRecordingUploads)
+    ];
+
+    return {
+      schemaVersion: 1,
+      appVersion: import.meta.env.VITE_APP_VERSION?.trim() || "dev",
+      platform: window.vocabApi ? "electron" : "web",
+      checkedAt,
+      mode,
+      uidHash: uid ? await hashUid(uid) : null,
+      isOnline: navigator.onLine,
+      pendingRecordingUploads,
+      failedRecordingUploads,
+      checks
+    };
+  }
+
+  async submitMonitorSnapshot(snapshot: MonitorSnapshot): Promise<MonitorSubmitResult> {
+    const { auth, functionsBaseUrl } = await getRuntime();
+    const user = await getActiveAuthUser(auth);
+    if (!user) {
+      throw new Error("请先登录后再上报诊断");
+    }
+
+    const response = await fetchWithTimeout(`${functionsBaseUrl}/monitorIngest`, {
+      method: "POST",
+      headers: {
+        "authorization": `Bearer ${await user.getIdToken(false)}`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(snapshot)
+    });
+    if (!response.ok) {
+      throw new Error(`诊断上报失败：HTTP ${response.status}`);
+    }
+    return response.json().catch(() => ({ accepted: true })) as Promise<MonitorSubmitResult>;
+  }
+
+  private async checkFirestore(uid: string | null): Promise<HealthCheckResult> {
+    return timedHealthCheck("firestore", async () => {
+      if (!uid) {
+        return { status: "unknown", message: "Firestore check needs a signed-in user" };
+      }
+      const { db } = await getRuntime();
+      await Promise.all([
+        getDocs(query(collection(db, userTagsPath(uid)), where("deletedAt", "==", null), limit(1))),
+        getDocs(query(collection(db, userWordsPath(uid)), where("deletedAt", "==", null), limit(1)))
+      ]);
+      return { status: "ok", message: "user vocabulary collections are readable" };
+    });
+  }
+
+  private async checkStorage(
+    uid: string | null,
+    pendingRecordingUploads: number,
+    failedRecordingUploads: number
+  ): Promise<HealthCheckResult> {
+    return timedHealthCheck("storage", async () => {
+      if (!uid) {
+        return { status: "unknown", message: "Storage check needs a signed-in user" };
+      }
+      await getRuntime();
+      if (!navigator.onLine) {
+        return { status: "degraded", message: "browser reports offline; recording uploads will stay queued" };
+      }
+      if (failedRecordingUploads > 0) {
+        return {
+          status: "degraded",
+          message: `${failedRecordingUploads} recording upload${failedRecordingUploads === 1 ? "" : "s"} previously failed`
+        };
+      }
+      if (pendingRecordingUploads > 0) {
+        return {
+          status: "degraded",
+          message: `${pendingRecordingUploads} recording upload${pendingRecordingUploads === 1 ? "" : "s"} waiting in the local queue`
+        };
+      }
+      return { status: "ok", message: "Storage SDK is initialized; no queued recording uploads" };
+    });
+  }
+
+  private async checkFunctions(): Promise<HealthCheckResult> {
+    return timedHealthCheck("functions", async () => {
+      const { functionsBaseUrl } = await getRuntime();
+      const response = await fetchWithTimeout(`${functionsBaseUrl}/monitorHealth`);
+      if (!response.ok) {
+        return {
+          status: response.status >= 500 ? "down" : "degraded",
+          message: `monitorHealth returned HTTP ${response.status}`,
+          errorCode: `http-${response.status}`
+        };
+      }
+      return { status: "ok", message: "monitorHealth responded" };
+    });
   }
 
   private async canUseCloudData(): Promise<boolean> {
@@ -584,18 +733,28 @@ class FirebaseCloudApi {
 async function getRuntime(): Promise<FirebaseRuntime> {
   if (!runtimePromise) {
     runtimePromise = Promise.resolve().then(() => {
-      const app = initializeApp(getFirebaseWebConfig());
+      const config = getFirebaseWebConfig();
+      const app = initializeApp(config);
       return {
         app,
         auth: getAuth(app),
         db: initializeFirestore(app, {
           localCache: persistentLocalCache({ tabManager: persistentSingleTabManager(undefined) })
         }),
-        storage: getStorage(app)
+        storage: getStorage(app),
+        functionsBaseUrl: functionsBaseUrl(config.projectId)
       };
     });
   }
   return runtimePromise;
+}
+
+function functionsBaseUrl(projectId: string): string {
+  const configured = import.meta.env.VITE_FIREBASE_FUNCTIONS_BASE_URL?.trim();
+  if (configured) {
+    return configured.replace(/\/+$/, "");
+  }
+  return `https://us-central1-${projectId}.cloudfunctions.net`;
 }
 
 function ensureAuthPersistence(auth: Auth): Promise<void> {
@@ -680,6 +839,101 @@ function createId(): string {
 
 function errorMessage(caught: unknown): string {
   return caught instanceof Error ? caught.message : "操作失败";
+}
+
+function errorCode(caught: unknown): string | null {
+  if (typeof caught === "object" && caught !== null && "code" in caught) {
+    const code = (caught as { code?: unknown }).code;
+    return typeof code === "string" ? code : null;
+  }
+  return null;
+}
+
+async function timedHealthCheck(
+  service: HealthService,
+  check: () => Promise<HealthCheckOutcome>
+): Promise<HealthCheckResult> {
+  const startedAt = performance.now();
+  const checkedAt = new Date().toISOString();
+  try {
+    const result = await check();
+    return {
+      service,
+      status: result.status,
+      latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
+      checkedAt,
+      message: result.message,
+      errorCode: result.errorCode ?? null
+    };
+  } catch (caught) {
+    return {
+      service,
+      status: "down",
+      latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
+      checkedAt,
+      message: errorMessage(caught),
+      errorCode: errorCode(caught)
+    };
+  }
+}
+
+function recordingQueueHealthCheck(pendingRecordingUploads: number, failedRecordingUploads: number): HealthCheckResult {
+  const checkedAt = new Date().toISOString();
+  if (failedRecordingUploads > 0) {
+    return {
+      service: "recordingQueue",
+      status: "degraded",
+      latencyMs: null,
+      checkedAt,
+      message: `${failedRecordingUploads} recording upload${failedRecordingUploads === 1 ? "" : "s"} failed`,
+      errorCode: "recording-queue-failed"
+    };
+  }
+  if (pendingRecordingUploads > 0) {
+    return {
+      service: "recordingQueue",
+      status: "degraded",
+      latencyMs: null,
+      checkedAt,
+      message: `${pendingRecordingUploads} recording upload${pendingRecordingUploads === 1 ? "" : "s"} pending`,
+      errorCode: "recording-queue-pending"
+    };
+  }
+  return {
+    service: "recordingQueue",
+    status: "ok",
+    latencyMs: null,
+    checkedAt,
+    message: "recording upload queue is empty",
+    errorCode: null
+  };
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = 8000): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+async function hashUid(uid: string): Promise<string> {
+  const subtle = crypto.subtle;
+  if (subtle) {
+    const digest = await subtle.digest("SHA-256", new TextEncoder().encode(uid));
+    return Array.from(new Uint8Array(digest))
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("")
+      .slice(0, 32);
+  }
+  let hash = 2166136261;
+  for (let index = 0; index < uid.length; index += 1) {
+    hash ^= uid.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `fnv-${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }
 
 async function openQueueDb(): Promise<IDBDatabase> {
