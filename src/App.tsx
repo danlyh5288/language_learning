@@ -24,6 +24,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import appLogo from "../assets/app-logo.svg";
 import { api, isElectronRuntime } from "./api";
 import {
+  type I18nMessages,
+  type Locale,
+  messages,
+  readStoredLocale,
+  writeStoredLocale
+} from "./i18n";
+import {
   type AuthState,
   type CloudUser,
   type TagRecord,
@@ -55,6 +62,8 @@ const emptyDraft: WordInput = {
 };
 
 export default function App() {
+  const [locale, setLocale] = useState<Locale>(readStoredLocale);
+  const i18n = messages[locale];
   const [words, setWords] = useState<WordRecord[]>([]);
   const [allWords, setAllWords] = useState<WordRecord[]>([]);
   const [tags, setTags] = useState<TagRecord[]>([]);
@@ -85,6 +94,11 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const listAudioRef = useRef<HTMLAudioElement | null>(null);
 
+  const changeLocale = useCallback((nextLocale: Locale) => {
+    setLocale(nextLocale);
+    writeStoredLocale(nextLocale);
+  }, []);
+
   const loadCloudStatus = useCallback(async ({ authState, showError = false, assumeCloudEnabled = false }: LoadCloudStatusOptions = {}) => {
     if (!api.cloudSync) {
       return;
@@ -102,10 +116,10 @@ export default function App() {
         setCloudStatus((current) => cloudStatusFromAuthState(authState, current, assumeCloudEnabled));
       }
       if (showError) {
-        setCloudError(cloudErrorMessage(caught));
+        setCloudError(cloudErrorMessage(caught, i18n));
       }
     }
-  }, []);
+  }, [i18n]);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -121,15 +135,20 @@ export default function App() {
       setError(null);
       void loadCloudStatus();
     } catch (caught) {
-      setError(errorMessage(caught));
+      setError(errorMessage(caught, i18n));
     } finally {
       setIsLoading(false);
     }
-  }, [activeTagId, loadCloudStatus, query]);
+  }, [activeTagId, i18n, loadCloudStatus, query]);
 
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    document.title = i18n.app.name;
+    document.documentElement.lang = locale === "zh" ? "zh-CN" : "en";
+  }, [locale]);
 
   useEffect(() => {
     if (!cloudStatus?.isEnabled || !api.cloudSync?.subscribe) {
@@ -148,14 +167,14 @@ export default function App() {
       }
       unsubscribe = nextUnsubscribe;
     }).catch((caught) => {
-      setCloudError(cloudErrorMessage(caught));
+      setCloudError(cloudErrorMessage(caught, i18n));
     });
 
     return () => {
       cancelled = true;
       unsubscribe?.();
     };
-  }, [cloudStatus?.isEnabled, cloudStatus?.user?.uid, loadData]);
+  }, [cloudStatus?.isEnabled, cloudStatus?.user?.uid, i18n, loadData]);
 
   useEffect(() => {
     if (!selectedWord) {
@@ -192,11 +211,11 @@ export default function App() {
       }
     }
 
-    void loadPlaybackUrl().catch((caught) => setError(errorMessage(caught)));
+    void loadPlaybackUrl().catch((caught) => setError(errorMessage(caught, i18n)));
     return () => {
       cancelled = true;
     };
-  }, [pendingRecording, selectedWord?.hasRecording, selectedWord?.id, selectedWord?.updatedAt]);
+  }, [i18n, pendingRecording, selectedWord?.hasRecording, selectedWord?.id, selectedWord?.updatedAt]);
 
   useEffect(() => {
     return () => {
@@ -224,7 +243,7 @@ export default function App() {
     );
   }, [allWords, draft.text, isSaving, selectedWord?.id]);
 
-  const title = isCreating ? "新词条" : selectedWord?.text ?? "选择词条";
+  const title = isCreating ? i18n.detail.newWordTitle : selectedWord?.text ?? i18n.detail.selectWordTitle;
   const canSave = draft.text.trim().length > 0 && !isSaving;
 
   const openAuthModal = useCallback((mode: AuthMode) => {
@@ -285,7 +304,7 @@ export default function App() {
       setNewTagName("");
       await loadData();
     } catch (caught) {
-      setError(errorMessage(caught));
+      setError(errorMessage(caught, i18n));
     }
   }
 
@@ -319,10 +338,10 @@ export default function App() {
         tagId: savedWord.tagId,
         toneNote: savedWord.toneNote
       });
-      setMessage("已保存");
+      setMessage(i18n.status.saved);
       await loadData();
     } catch (caught) {
-      setError(errorMessage(caught));
+      setError(errorMessage(caught, i18n));
     } finally {
       setIsSaving(false);
     }
@@ -333,7 +352,7 @@ export default function App() {
       return;
     }
 
-    const confirmed = window.confirm(`删除“${selectedWord.text}”？录音也会从本机移除。`);
+    const confirmed = window.confirm(i18n.detail.deleteConfirm(selectedWord.text));
     if (!confirmed) {
       return;
     }
@@ -343,10 +362,10 @@ export default function App() {
       clearPendingRecording();
       setSelectedWord(null);
       setDraft(emptyDraft);
-      setMessage("已删除");
+      setMessage(i18n.status.deleted);
       await loadData();
     } catch (caught) {
-      setError(errorMessage(caught));
+      setError(errorMessage(caught, i18n));
     }
   }
 
@@ -370,7 +389,7 @@ export default function App() {
       await audio.play();
     } catch (caught) {
       setPlayingWordId(null);
-      setError(errorMessage(caught));
+      setError(errorMessage(caught, i18n));
     }
   }
 
@@ -386,7 +405,7 @@ export default function App() {
       durationMs,
       url: URL.createObjectURL(blob)
     });
-    setMessage("新录音待保存");
+    setMessage(i18n.status.newRecordingPending);
   }
 
   async function signIn() {
@@ -406,11 +425,11 @@ export default function App() {
       setSelectedWord(null);
       setIsCreating(false);
       setDraft(emptyDraft);
-      setCloudMessage("已登录，正在开启云同步");
+      setCloudMessage(i18n.cloudMessages.signedInEnablingCloud);
       setIsCloudBusy(false);
-      void activateCloudSyncAfterAuth(authState, "已登录并开启云同步");
+      void activateCloudSyncAfterAuth(authState, i18n.cloudMessages.signedInCloudEnabled);
     } catch (caught) {
-      setCloudError(cloudErrorMessage(caught));
+      setCloudError(cloudErrorMessage(caught, i18n));
     } finally {
       if (!authSucceeded) {
         setIsCloudBusy(false);
@@ -435,11 +454,11 @@ export default function App() {
       setSelectedWord(null);
       setIsCreating(false);
       setDraft(emptyDraft);
-      setCloudMessage("已注册，正在开启云同步");
+      setCloudMessage(i18n.cloudMessages.signedUpEnablingCloud);
       setIsCloudBusy(false);
-      void activateCloudSyncAfterAuth(authState, "已注册并开启云同步");
+      void activateCloudSyncAfterAuth(authState, i18n.cloudMessages.signedUpCloudEnabled);
     } catch (caught) {
-      setCloudError(cloudErrorMessage(caught));
+      setCloudError(cloudErrorMessage(caught, i18n));
     } finally {
       if (!authSucceeded) {
         setIsCloudBusy(false);
@@ -463,8 +482,8 @@ export default function App() {
       await loadCloudStatus({ authState, assumeCloudEnabled: true });
       await loadData();
     } catch (caught) {
-      const activationError = cloudActivationErrorMessage(caught);
-      setCloudMessage("已登录，本地模式可继续使用");
+      const activationError = cloudActivationErrorMessage(caught, i18n);
+      setCloudMessage(i18n.cloudMessages.signedInLocalMode);
       await loadCloudStatus({ authState });
       await loadData();
       setCloudError(activationError);
@@ -482,10 +501,10 @@ export default function App() {
     setCloudMessage(null);
     try {
       await api.auth.sendVerificationEmail();
-      setCloudMessage("验证邮件已重新发送");
+      setCloudMessage(i18n.cloudMessages.verificationEmailSent);
       await loadCloudStatus({ showError: true });
     } catch (caught) {
-      setCloudError(cloudErrorMessage(caught));
+      setCloudError(cloudErrorMessage(caught, i18n));
     } finally {
       setIsCloudBusy(false);
     }
@@ -503,10 +522,10 @@ export default function App() {
       setSelectedWord(null);
       setIsCreating(false);
       setDraft(emptyDraft);
-      setCloudMessage("已退出云端账号");
+      setCloudMessage(i18n.cloudMessages.signedOut);
       await loadData();
     } catch (caught) {
-      setCloudError(cloudErrorMessage(caught));
+      setCloudError(cloudErrorMessage(caught, i18n));
     } finally {
       setIsCloudBusy(false);
     }
@@ -524,10 +543,10 @@ export default function App() {
       setSelectedWord(null);
       setIsCreating(false);
       setDraft(emptyDraft);
-      setCloudMessage("已开启云同步");
+      setCloudMessage(i18n.cloudMessages.cloudEnabled);
       await loadData();
     } catch (caught) {
-      setCloudError(cloudErrorMessage(caught));
+      setCloudError(cloudErrorMessage(caught, i18n));
     } finally {
       setIsCloudBusy(false);
     }
@@ -545,10 +564,10 @@ export default function App() {
       setSelectedWord(null);
       setIsCreating(false);
       setDraft(emptyDraft);
-      setCloudMessage("已切换到本地模式");
+      setCloudMessage(i18n.cloudMessages.switchedLocal);
       await loadData();
     } catch (caught) {
-      setCloudError(cloudErrorMessage(caught));
+      setCloudError(cloudErrorMessage(caught, i18n));
     } finally {
       setIsCloudBusy(false);
     }
@@ -564,9 +583,9 @@ export default function App() {
     try {
       await api.cloudSync.refresh();
       await loadData();
-      setCloudMessage("云同步已刷新");
+      setCloudMessage(i18n.cloudMessages.cloudRefreshed);
     } catch (caught) {
-      setCloudError(cloudErrorMessage(caught));
+      setCloudError(cloudErrorMessage(caught, i18n));
     } finally {
       setIsCloudBusy(false);
     }
@@ -574,7 +593,7 @@ export default function App() {
 
   async function refreshMonitor() {
     if (!api.monitor) {
-      setMonitorError("诊断不可用");
+      setMonitorError(i18n.cloudMessages.diagnosticsUnavailable);
       return null;
     }
     setIsMonitorBusy(true);
@@ -583,10 +602,10 @@ export default function App() {
     try {
       const snapshot = await api.monitor.getSnapshot();
       setMonitorSnapshot(snapshot);
-      setMonitorMessage("诊断已刷新");
+      setMonitorMessage(i18n.cloudMessages.diagnosticsRefreshed);
       return snapshot;
     } catch (caught) {
-      setMonitorError(errorMessage(caught));
+      setMonitorError(errorMessage(caught, i18n));
       return null;
     } finally {
       setIsMonitorBusy(false);
@@ -595,7 +614,7 @@ export default function App() {
 
   async function submitMonitorSnapshot() {
     if (!api.monitor) {
-      setMonitorError("诊断上报不可用");
+      setMonitorError(i18n.cloudMessages.diagnosticsSubmitUnavailable);
       return;
     }
     setIsMonitorBusy(true);
@@ -605,9 +624,9 @@ export default function App() {
       const snapshot = monitorSnapshot ?? await api.monitor.getSnapshot();
       setMonitorSnapshot(snapshot);
       const result = await api.monitor.submitSnapshot(snapshot);
-      setMonitorMessage(result.accepted ? "诊断已上报" : "OpenObserve 未配置，诊断未上报");
+      setMonitorMessage(result.accepted ? i18n.cloudMessages.diagnosticsSubmitted : i18n.cloudMessages.diagnosticsSkipped);
     } catch (caught) {
-      setMonitorError(errorMessage(caught));
+      setMonitorError(errorMessage(caught, i18n));
     } finally {
       setIsMonitorBusy(false);
     }
@@ -625,105 +644,109 @@ export default function App() {
   return (
     <>
       <main className="app-shell">
-        <aside className="sidebar" aria-label="标签">
+        <aside className="sidebar" aria-label={i18n.sidebar.tags}>
           <div className="brand">
             <div className="brand-mark">
               <img src={appLogo} alt="" aria-hidden="true" />
             </div>
             <div>
-              <h1>发音词库</h1>
-              <p>{cloudStatus?.isEnabled ? "云端模式" : isElectronRuntime ? "本地模式" : "浏览器预览"}</p>
+              <h1>{i18n.app.name}</h1>
+              <p>{cloudStatus?.isEnabled ? i18n.app.cloudMode : isElectronRuntime ? i18n.app.localMode : i18n.app.browserPreview}</p>
             </div>
           </div>
+
+          <LocaleToggle locale={locale} i18n={i18n} onChange={changeLocale} />
 
           <nav className="tag-nav">
             <FilterButton
               active={activeTagId === null}
               icon={<ListMusic size={16} />}
-              label="全部"
+              label={i18n.sidebar.all}
               count={allWords.length}
               onClick={() => setActiveTagId(null)}
             />
             <FilterButton
               active={activeTagId === UNTAGGED_FILTER_ID}
               icon={<Tag size={16} />}
-              label="未分类"
+              label={i18n.sidebar.untagged}
               count={untaggedCount}
               onClick={() => setActiveTagId(UNTAGGED_FILTER_ID)}
             />
           </nav>
 
-        <div className="tag-section">
-          <div className="section-label">标签</div>
-          {tags.length === 0 ? (
-            <div className="muted-row">暂无标签</div>
-          ) : (
-            tags.map((tag) => (
-              <button
-                className={`tag-filter ${activeTagId === tag.id ? "is-active" : ""}`}
-                key={tag.id}
-                type="button"
-                onClick={() => setActiveTagId(tag.id)}
-              >
-                <span className="tag-dot" style={{ backgroundColor: tag.color }} />
-                <span>{tag.name}</span>
-                <span className="tag-count">{tag.wordCount}</span>
-              </button>
-            ))
-          )}
-        </div>
+          <div className="tag-section">
+            <div className="section-label">{i18n.sidebar.tags}</div>
+            {tags.length === 0 ? (
+              <div className="muted-row">{i18n.sidebar.noTags}</div>
+            ) : (
+              tags.map((tag) => (
+                <button
+                  className={`tag-filter ${activeTagId === tag.id ? "is-active" : ""}`}
+                  key={tag.id}
+                  type="button"
+                  onClick={() => setActiveTagId(tag.id)}
+                >
+                  <span className="tag-dot" style={{ backgroundColor: tag.color }} />
+                  <span>{tag.name}</span>
+                  <span className="tag-count">{tag.wordCount}</span>
+                </button>
+              ))
+            )}
+          </div>
 
-        <AccountDock
-          status={cloudStatus}
-          busy={isCloudBusy}
-          message={cloudMessage}
-          error={authMode ? null : cloudError}
-          onOpenAuth={openAuthModal}
-          onSendVerificationEmail={() => void sendVerificationEmail()}
-          onSignOut={() => void signOut()}
-          onEnable={() => void enableCloudSync()}
-          onDisable={() => void disableCloudSync()}
-          onRefresh={() => void refreshCloudSync()}
-          onOpenMonitor={openMonitor}
-        />
-      </aside>
+          <AccountDock
+            i18n={i18n}
+            status={cloudStatus}
+            busy={isCloudBusy}
+            message={cloudMessage}
+            error={authMode ? null : cloudError}
+            onOpenAuth={openAuthModal}
+            onSendVerificationEmail={() => void sendVerificationEmail()}
+            onSignOut={() => void signOut()}
+            onEnable={() => void enableCloudSync()}
+            onDisable={() => void disableCloudSync()}
+            onRefresh={() => void refreshCloudSync()}
+            onOpenMonitor={openMonitor}
+          />
+        </aside>
 
-      <section className="word-column" aria-label="词条列表">
+      <section className="word-column" aria-label={i18n.list.ariaLabel}>
         <header className="list-header">
           <div className="search-wrap">
             <Search size={17} />
             <input
-              aria-label="搜索词条"
-              placeholder="搜索词、备注或 #标签"
+              aria-label={i18n.list.searchLabel}
+              placeholder={i18n.list.searchPlaceholder}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
             {query ? (
-              <button className="icon-button compact" type="button" aria-label="清空搜索" onClick={() => setQuery("")}>
+              <button className="icon-button compact" type="button" aria-label={i18n.list.clearSearch} onClick={() => setQuery("")}>
                 <X size={15} />
               </button>
             ) : null}
           </div>
           <button className="primary-button" type="button" onClick={startNewWord}>
             <Plus size={17} />
-            添加词条
+            {i18n.list.addWord}
           </button>
         </header>
 
         <div className="list-meta">
-          <span>{isLoading ? "加载中" : `${words.length} 个词条`}</span>
-          {activeTagId || query ? <button type="button" onClick={() => { setActiveTagId(null); setQuery(""); }}>清除筛选</button> : null}
+          <span>{isLoading ? i18n.list.loading : i18n.list.wordCount(words.length)}</span>
+          {activeTagId || query ? <button type="button" onClick={() => { setActiveTagId(null); setQuery(""); }}>{i18n.list.clearFilters}</button> : null}
         </div>
 
         <div className="word-list">
           {words.length === 0 ? (
             <div className="empty-list">
-              <p>暂无匹配词条</p>
-              <button type="button" onClick={startNewWord}>添加第一个词</button>
+              <p>{i18n.list.noMatches}</p>
+              <button type="button" onClick={startNewWord}>{i18n.list.addFirstWord}</button>
             </div>
           ) : (
             words.map((word) => (
               <WordRow
+                i18n={i18n}
                 key={word.id}
                 word={word}
                 selected={selectedWord?.id === word.id}
@@ -736,14 +759,14 @@ export default function App() {
         </div>
       </section>
 
-      <section className="detail-panel" aria-label="词条详情">
+      <section className="detail-panel" aria-label={i18n.detail.ariaLabel}>
         <div className="detail-title-row">
           <div>
-            <span className="eyebrow">{isCreating ? "添加" : selectedWord ? "编辑" : "详情"}</span>
+            <span className="eyebrow">{isCreating ? i18n.detail.add : selectedWord ? i18n.detail.edit : i18n.detail.details}</span>
             <h2>{title}</h2>
           </div>
           {selectedWord ? (
-            <button className="icon-button danger" type="button" aria-label="删除词条" onClick={() => void deleteSelectedWord()}>
+            <button className="icon-button danger" type="button" aria-label={i18n.detail.deleteWord} onClick={() => void deleteSelectedWord()}>
               <Trash2 size={18} />
             </button>
           ) : null}
@@ -752,15 +775,15 @@ export default function App() {
         {!selectedWord && !isCreating ? (
           <div className="empty-detail">
             <BookOpen size={36} />
-            <p>选择或添加词条</p>
+            <p>{i18n.detail.empty}</p>
           </div>
         ) : (
           <>
             <label className="field">
-              <span>词条</span>
+              <span>{i18n.detail.wordLabel}</span>
               <input
                 value={draft.text}
-                placeholder="例如：侬好"
+                placeholder={i18n.detail.wordPlaceholder}
                 onChange={(event) => updateDraft({ text: event.target.value })}
               />
             </label>
@@ -768,18 +791,18 @@ export default function App() {
             {duplicateWord ? (
               <div className="inline-warning">
                 <AlertCircle size={16} />
-                已有同名词条：{duplicateWord.text}
+                {i18n.detail.duplicateWord(duplicateWord.text)}
               </div>
             ) : null}
 
             <div className="field-grid">
               <label className="field">
-                <span>标签</span>
+                <span>{i18n.detail.tagLabel}</span>
                 <select
                   value={draft.tagId ?? ""}
                   onChange={(event) => updateDraft({ tagId: event.target.value || null })}
                 >
-                  <option value="">未分类</option>
+                  <option value="">{i18n.detail.untaggedOption}</option>
                   {tags.map((tag) => (
                     <option key={tag.id} value={tag.id}>
                       {tag.name}
@@ -789,11 +812,11 @@ export default function App() {
               </label>
 
               <div className="field">
-                <span>新建标签</span>
+                <span>{i18n.detail.newTagLabel}</span>
                 <div className="inline-create">
                   <input
                     value={newTagName}
-                    placeholder="如：第一课"
+                    placeholder={i18n.detail.newTagPlaceholder}
                     onChange={(event) => setNewTagName(event.target.value)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter") {
@@ -802,7 +825,7 @@ export default function App() {
                       }
                     }}
                   />
-                  <button className="icon-button" type="button" aria-label="新建标签" onClick={() => void createTag()}>
+                  <button className="icon-button" type="button" aria-label={i18n.detail.createTag} onClick={() => void createTag()}>
                     <Plus size={16} />
                   </button>
                 </div>
@@ -810,10 +833,10 @@ export default function App() {
             </div>
 
             <label className="field">
-              <span>音调备注</span>
+              <span>{i18n.detail.toneNoteLabel}</span>
               <textarea
                 value={draft.toneNote}
-                placeholder="记录老师提示、调值、近似音或易错点"
+                placeholder={i18n.detail.toneNotePlaceholder}
                 rows={5}
                 onChange={(event) => updateDraft({ toneNote: event.target.value })}
               />
@@ -822,25 +845,26 @@ export default function App() {
             <div className="audio-surface">
               <div className="audio-heading">
                 <div>
-                  <span>发音录音</span>
+                  <span>{i18n.detail.pronunciationRecording}</span>
                   <strong>
                     {pendingRecording
-                      ? `新录音 ${formatDuration(pendingRecording.durationMs)}`
+                      ? i18n.detail.newRecording(formatDuration(pendingRecording.durationMs))
                       : selectedWord?.hasRecording
                         ? formatDuration(selectedWord.audioDurationMs)
-                        : "尚未录音"}
+                        : i18n.detail.noRecording}
                   </strong>
                 </div>
-                {pendingRecording ? <span className="pending-pill">待保存</span> : null}
+                {pendingRecording ? <span className="pending-pill">{i18n.detail.pendingSave}</span> : null}
               </div>
 
               {playbackUrl ? (
                 <audio className="audio-player" controls src={playbackUrl} />
               ) : (
-                <div className="audio-placeholder">保存一段录音后可在这里试听</div>
+                <div className="audio-placeholder">{i18n.detail.audioPlaceholder}</div>
               )}
 
               <AudioRecorder
+                i18n={i18n}
                 hasExistingRecording={Boolean(selectedWord?.hasRecording || pendingRecording)}
                 hasPendingRecording={Boolean(pendingRecording)}
                 onDiscard={clearPendingRecording}
@@ -855,7 +879,7 @@ export default function App() {
               </div>
               <button className="primary-button save-button" type="button" disabled={!canSave} onClick={() => void saveDraft()}>
                 <Save size={17} />
-                {isSaving ? "保存中" : "保存"}
+                {isSaving ? i18n.detail.saving : i18n.detail.save}
               </button>
             </footer>
           </>
@@ -864,6 +888,7 @@ export default function App() {
     </main>
     {authMode ? (
       <AuthModal
+        i18n={i18n}
         mode={authMode}
         email={authEmail}
         password={authPassword}
@@ -878,6 +903,8 @@ export default function App() {
     ) : null}
     {isMonitorOpen ? (
       <MonitorModal
+        i18n={i18n}
+        locale={locale}
         snapshot={monitorSnapshot}
         busy={isMonitorBusy}
         message={monitorMessage}
@@ -899,7 +926,27 @@ type FilterButtonProps = {
   onClick: () => void;
 };
 
+type LocaleToggleProps = {
+  locale: Locale;
+  i18n: I18nMessages;
+  onChange: (locale: Locale) => void;
+};
+
+function LocaleToggle({ locale, i18n, onChange }: LocaleToggleProps) {
+  return (
+    <div className="locale-switch" role="group" aria-label={i18n.locale.ariaLabel}>
+      <button type="button" aria-pressed={locale === "en"} onClick={() => onChange("en")}>
+        {i18n.locale.english}
+      </button>
+      <button type="button" aria-pressed={locale === "zh"} onClick={() => onChange("zh")}>
+        {i18n.locale.chinese}
+      </button>
+    </div>
+  );
+}
+
 type AccountDockProps = {
+  i18n: I18nMessages;
   status: CloudSyncStatus | null;
   busy: boolean;
   message: string | null;
@@ -914,6 +961,7 @@ type AccountDockProps = {
 };
 
 function AccountDock({
+  i18n,
   status,
   busy,
   message,
@@ -931,14 +979,14 @@ function AccountDock({
   const canEnableCloud = !busy && signedIn;
   const statusLabel = status?.isEnabled
     ? status.pendingRecordingUploads > 0
-      ? `云端模式 · ${status.pendingRecordingUploads} 个录音待上传`
-      : "云端模式 · 已同步"
+      ? i18n.account.cloudModePendingUploads(status.pendingRecordingUploads)
+      : i18n.account.cloudModeSynced
     : signedIn
-      ? "已登录 · 云同步已停用"
-      : "本地模式";
+      ? i18n.account.signedInCloudDisabled
+      : i18n.account.localMode;
 
   return (
-    <section className="account-dock" aria-label="账户">
+    <section className="account-dock" aria-label={i18n.account.ariaLabel}>
       <div className="account-heading">
         <Cloud size={15} />
         <span>{statusLabel}</span>
@@ -948,37 +996,37 @@ function AccountDock({
         <div className="account-auth-actions">
           <button type="button" disabled={busy} onClick={() => onOpenAuth("signUp")}>
             <Plus size={14} />
-            注册
+            {i18n.account.signUp}
           </button>
           <button type="button" disabled={busy} onClick={() => onOpenAuth("signIn")}>
             <LogIn size={14} />
-            登录
+            {i18n.account.signIn}
           </button>
         </div>
       ) : (
         <div className="cloud-account">
           <div className="cloud-account-line">
             <UserRound size={14} />
-            <span className="cloud-email" title={status?.user?.email ?? undefined}>{status?.user?.email ?? "已登录"}</span>
-            {!emailVerified ? <span className="verify-pill">邮箱未验证</span> : null}
+            <span className="cloud-email" title={status?.user?.email ?? undefined}>{status?.user?.email ?? i18n.account.signedIn}</span>
+            {!emailVerified ? <span className="verify-pill">{i18n.account.emailNotVerified}</span> : null}
           </div>
           <div className="cloud-actions">
             {status?.isEnabled ? (
-              <button type="button" disabled={busy} onClick={onDisable}>停用</button>
+              <button type="button" disabled={busy} onClick={onDisable}>{i18n.account.disable}</button>
             ) : (
-              <button type="button" disabled={!canEnableCloud} onClick={onEnable}>开启</button>
+              <button type="button" disabled={!canEnableCloud} onClick={onEnable}>{i18n.account.enable}</button>
             )}
             {!emailVerified ? (
-              <button type="button" disabled={busy} onClick={onSendVerificationEmail}>重发验证邮件</button>
+              <button type="button" disabled={busy} onClick={onSendVerificationEmail}>{i18n.account.resendVerification}</button>
             ) : null}
-            <button type="button" disabled={busy} aria-label="刷新云同步" onClick={onRefresh}>
+            <button type="button" disabled={busy} aria-label={i18n.account.refreshCloudSync} onClick={onRefresh}>
               <RefreshCw size={14} />
             </button>
             <button type="button" disabled={busy} onClick={onOpenMonitor}>
               <Activity size={14} />
-              诊断
+              {i18n.account.diagnostics}
             </button>
-            <button type="button" disabled={busy} aria-label="退出云端账号" onClick={onSignOut}>
+            <button type="button" disabled={busy} aria-label={i18n.account.signOut} onClick={onSignOut}>
               <LogOut size={14} />
             </button>
           </div>
@@ -991,6 +1039,8 @@ function AccountDock({
 }
 
 type MonitorModalProps = {
+  i18n: I18nMessages;
+  locale: Locale;
   snapshot: MonitorSnapshot | null;
   busy: boolean;
   message: string | null;
@@ -1001,6 +1051,8 @@ type MonitorModalProps = {
 };
 
 function MonitorModal({
+  i18n,
+  locale,
   snapshot,
   busy,
   message,
@@ -1033,18 +1085,18 @@ function MonitorModal({
       >
         <div className="auth-modal-header">
           <div>
-            <span className="eyebrow">云同步诊断</span>
-            <h2 id="monitor-modal-title">Service health</h2>
+            <span className="eyebrow">{i18n.monitor.eyebrow}</span>
+            <h2 id="monitor-modal-title">{i18n.monitor.title}</h2>
           </div>
-          <button className="icon-button compact" type="button" aria-label="关闭" disabled={busy} onClick={onClose}>
+          <button className="icon-button compact" type="button" aria-label={i18n.monitor.close} disabled={busy} onClick={onClose}>
             <X size={15} />
           </button>
         </div>
 
         <div className="monitor-summary">
           <span className={`health-dot ${overallStatus}`} />
-          <strong>{healthStatusLabel(overallStatus)}</strong>
-          <span>{snapshot ? new Date(snapshot.checkedAt).toLocaleString() : "尚未检查"}</span>
+          <strong>{healthStatusLabel(overallStatus, i18n)}</strong>
+          <span>{snapshot ? new Date(snapshot.checkedAt).toLocaleString(locale === "zh" ? "zh-CN" : "en-US") : i18n.monitor.notChecked}</span>
         </div>
 
         {snapshot ? (
@@ -1056,7 +1108,7 @@ function MonitorModal({
             <span>uid hash</span>
             <strong>{snapshot.uidHash ?? "none"}</strong>
             <span>recordings</span>
-            <strong>{snapshot.pendingRecordingUploads} pending · {snapshot.failedRecordingUploads} failed</strong>
+            <strong>{i18n.monitor.recordingsSummary(snapshot.pendingRecordingUploads, snapshot.failedRecordingUploads)}</strong>
           </div>
         ) : null}
 
@@ -1072,7 +1124,7 @@ function MonitorModal({
               <span>{check.latencyMs === null ? "n/a" : `${check.latencyMs} ms`}</span>
             </div>
           )) ?? (
-            <div className="monitor-empty">点击刷新获取当前健康快照</div>
+            <div className="monitor-empty">{i18n.monitor.empty}</div>
           )}
         </div>
 
@@ -1082,11 +1134,11 @@ function MonitorModal({
         <div className="auth-modal-actions">
           <button className="secondary-button" type="button" disabled={busy} onClick={onRefresh}>
             <RefreshCw size={15} />
-            {busy ? "刷新中" : "刷新"}
+            {busy ? i18n.monitor.refreshing : i18n.monitor.refresh}
           </button>
           <button className="primary-button" type="button" disabled={busy || !snapshot} onClick={onSubmit}>
             <Cloud size={15} />
-            {busy ? "上报中" : "上报"}
+            {busy ? i18n.monitor.submitting : i18n.monitor.submit}
           </button>
         </div>
       </section>
@@ -1095,6 +1147,7 @@ function MonitorModal({
 }
 
 type AuthModalProps = {
+  i18n: I18nMessages;
   mode: AuthMode;
   email: string;
   password: string;
@@ -1108,6 +1161,7 @@ type AuthModalProps = {
 };
 
 function AuthModal({
+  i18n,
   mode,
   email,
   password,
@@ -1122,8 +1176,8 @@ function AuthModal({
   const isSignIn = mode === "signIn";
   const passwordTooShort = password.length > 0 && password.length < 6;
   const canSubmitAuth = email.trim().length > 0 && password.length >= 6 && !busy;
-  const title = isSignIn ? "登录" : "注册";
-  const authHelpText = passwordTooShort ? "密码至少 6 位" : "请输入邮箱和至少 6 位密码";
+  const title = isSignIn ? i18n.auth.signInTitle : i18n.auth.signUpTitle;
+  const authHelpText = passwordTooShort ? i18n.auth.passwordTooShort : i18n.auth.help;
 
   useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) {
@@ -1154,19 +1208,19 @@ function AuthModal({
       >
         <div className="auth-modal-header">
           <div>
-            <span className="eyebrow">云同步账号</span>
+            <span className="eyebrow">{i18n.auth.cloudSyncAccount}</span>
             <h2 id="auth-modal-title">{title}</h2>
           </div>
-          <button className="icon-button compact" type="button" aria-label="关闭" disabled={busy} onClick={onClose}>
+          <button className="icon-button compact" type="button" aria-label={i18n.auth.close} disabled={busy} onClick={onClose}>
             <X size={15} />
           </button>
         </div>
 
         <form className="auth-modal-form" onSubmit={submitAuth}>
           <label className="field compact-field">
-            <span>邮箱</span>
+            <span>{i18n.auth.email}</span>
             <input
-              aria-label="云同步邮箱"
+              aria-label={i18n.auth.emailAria}
               type="email"
               value={email}
               placeholder="learner@example.com"
@@ -1176,12 +1230,12 @@ function AuthModal({
             />
           </label>
           <label className="field compact-field">
-            <span>密码</span>
+            <span>{i18n.auth.password}</span>
             <input
-              aria-label="云同步密码"
+              aria-label={i18n.auth.passwordAria}
               type="password"
               value={password}
-              placeholder="至少 6 位"
+              placeholder={i18n.auth.passwordPlaceholder}
               autoComplete={isSignIn ? "current-password" : "new-password"}
               aria-describedby="auth-modal-help"
               onChange={(event) => onPasswordChange(event.target.value)}
@@ -1191,11 +1245,11 @@ function AuthModal({
           {error ? <p className="cloud-feedback error" role="alert">{error}</p> : null}
           <div className="auth-modal-actions">
             <button className="secondary-button" type="button" disabled={busy} onClick={() => onModeChange(isSignIn ? "signUp" : "signIn")}>
-              {isSignIn ? "改为注册" : "已有账号登录"}
+              {isSignIn ? i18n.auth.switchToSignUp : i18n.auth.switchToSignIn}
             </button>
             <button className="primary-button" type="submit" disabled={!canSubmitAuth}>
               {isSignIn ? <LogIn size={16} /> : <Plus size={16} />}
-              {busy ? "提交中" : title}
+              {busy ? i18n.auth.submitting : title}
             </button>
           </div>
         </form>
@@ -1215,6 +1269,7 @@ function FilterButton({ active, icon, label, count, onClick }: FilterButtonProps
 }
 
 type WordRowProps = {
+  i18n: I18nMessages;
   word: WordRecord;
   selected: boolean;
   playing: boolean;
@@ -1222,7 +1277,7 @@ type WordRowProps = {
   onPlay: () => void;
 };
 
-function WordRow({ word, selected, playing, onSelect, onPlay }: WordRowProps) {
+function WordRow({ i18n, word, selected, playing, onSelect, onPlay }: WordRowProps) {
   return (
     <div
       className={`word-row ${selected ? "is-selected" : ""}`}
@@ -1240,7 +1295,7 @@ function WordRow({ word, selected, playing, onSelect, onPlay }: WordRowProps) {
         className={`play-button ${playing ? "is-playing" : ""}`}
         type="button"
         disabled={!word.hasRecording}
-        aria-label={`播放 ${word.text}`}
+        aria-label={i18n.wordRow.play(word.text)}
         onClick={(event) => {
           event.stopPropagation();
           onPlay();
@@ -1251,25 +1306,26 @@ function WordRow({ word, selected, playing, onSelect, onPlay }: WordRowProps) {
       <div className="word-row-main">
         <div className="word-row-title">
           <strong>{word.text}</strong>
-          <span className="duration">{word.hasRecording ? formatDuration(word.audioDurationMs) : "未录音"}</span>
+          <span className="duration">{word.hasRecording ? formatDuration(word.audioDurationMs) : i18n.wordRow.noRecording}</span>
         </div>
-        <p>{word.toneNote || "无备注"}</p>
+        <p>{word.toneNote || i18n.wordRow.noNote}</p>
       </div>
       <span className="mini-tag" style={{ color: word.tagColor ?? "#64748b" }}>
-        {word.tagName ?? "未分类"}
+        {word.tagName ?? i18n.wordRow.untagged}
       </span>
     </div>
   );
 }
 
 type AudioRecorderProps = {
+  i18n: I18nMessages;
   hasExistingRecording: boolean;
   hasPendingRecording: boolean;
   onPreview: (blob: Blob, durationMs: number) => void;
   onDiscard: () => void;
 };
 
-function AudioRecorder({ hasExistingRecording, hasPendingRecording, onPreview, onDiscard }: AudioRecorderProps) {
+function AudioRecorder({ i18n, hasExistingRecording, hasPendingRecording, onPreview, onDiscard }: AudioRecorderProps) {
   const [status, setStatus] = useState<"idle" | "recording" | "processing">("idle");
   const [elapsedMs, setElapsedMs] = useState(0);
   const [level, setLevel] = useState(0);
@@ -1310,7 +1366,7 @@ function AudioRecorder({ hasExistingRecording, hasPendingRecording, onPreview, o
     setRecordingError(null);
 
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-      setRecordingError("当前环境不支持录音");
+      setRecordingError(i18n.recorder.unsupported);
       return;
     }
 
@@ -1346,7 +1402,7 @@ function AudioRecorder({ hasExistingRecording, hasPendingRecording, onPreview, o
         if (blob.size > 0) {
           onPreview(blob, durationMs);
         } else {
-          setRecordingError("录音为空，请重试");
+          setRecordingError(i18n.recorder.empty);
         }
       });
 
@@ -1369,7 +1425,7 @@ function AudioRecorder({ hasExistingRecording, hasPendingRecording, onPreview, o
     } catch (caught) {
       cleanupMedia();
       setStatus("idle");
-      setRecordingError(errorMessage(caught));
+      setRecordingError(errorMessage(caught, i18n));
     }
   }
 
@@ -1388,26 +1444,26 @@ function AudioRecorder({ hasExistingRecording, hasPendingRecording, onPreview, o
         {status === "recording" || status === "processing" ? (
           <button className="record-button is-recording" type="button" disabled={status === "processing"} onClick={stopRecording}>
             <Square size={16} fill="currentColor" />
-            {status === "processing" ? "处理中" : "停止"}
+            {status === "processing" ? i18n.recorder.processing : i18n.recorder.stop}
           </button>
         ) : (
           <button className="record-button" type="button" onClick={() => void startRecording()}>
             <Mic size={17} />
-            {hasExistingRecording ? "重新录音" : "录音"}
+            {hasExistingRecording ? i18n.recorder.reRecord : i18n.recorder.record}
           </button>
         )}
 
         {hasPendingRecording && status !== "recording" ? (
           <button className="secondary-button" type="button" onClick={onDiscard}>
             <RotateCcw size={16} />
-            丢弃
+            {i18n.recorder.discard}
           </button>
         ) : null}
 
         <span className="timer">{formatDuration(elapsedMs)}</span>
       </div>
 
-      <div className={`level-meter ${status === "recording" ? "is-live" : ""}`} aria-label="输入音量">
+      <div className={`level-meter ${status === "recording" ? "is-live" : ""}`} aria-label={i18n.recorder.inputLevel}>
         {Array.from({ length: 22 }, (_, index) => (
           <span
             key={index}
@@ -1451,17 +1507,8 @@ function summarizeMonitorStatus(snapshot: MonitorSnapshot): HealthStatus {
   return "ok";
 }
 
-function healthStatusLabel(status: HealthStatus): string {
-  switch (status) {
-    case "ok":
-      return "healthy";
-    case "degraded":
-      return "degraded";
-    case "down":
-      return "down";
-    case "unknown":
-      return "unknown";
-  }
+function healthStatusLabel(status: HealthStatus, i18n: I18nMessages): string {
+  return i18n.monitor.healthStatus[status];
 }
 
 function serviceLabel(service: string): string {
@@ -1517,52 +1564,52 @@ function cloudStatusForUser(user: CloudUser, current: CloudSyncStatus | null, as
   };
 }
 
-function errorMessage(caught: unknown): string {
+function errorMessage(caught: unknown, i18n: I18nMessages): string {
   if (caught instanceof DOMException && caught.name === "NotAllowedError") {
-    return "麦克风权限被拒绝";
+    return i18n.recorder.microphonePermissionDenied;
   }
   if (isFirestoreOfflineError(caught)) {
-    return "当前无法连接 Firebase，请检查网络后重试";
+    return i18n.errors.firestoreOffline;
   }
   if (caught instanceof Error) {
-    return caught.message;
+    return i18n.errors.messageOverrides[caught.message] ?? caught.message;
   }
-  return "操作失败";
+  return i18n.errors.genericFailure;
 }
 
-function cloudErrorMessage(caught: unknown): string {
+function cloudErrorMessage(caught: unknown, i18n: I18nMessages): string {
   const code = errorCode(caught);
   switch (code) {
     case "auth/email-already-in-use":
-      return "这个邮箱已注册，请直接登录";
+      return i18n.errors.authEmailAlreadyInUse;
     case "auth/invalid-email":
-      return "邮箱格式不正确";
+      return i18n.errors.authInvalidEmail;
     case "auth/invalid-credential":
     case "auth/user-not-found":
     case "auth/wrong-password":
-      return "邮箱或密码不正确";
+      return i18n.errors.authInvalidCredential;
     case "auth/weak-password":
-      return "密码至少 6 位";
+      return i18n.errors.authWeakPassword;
     case "auth/too-many-requests":
-      return "尝试次数过多，请稍后再试";
+      return i18n.errors.authTooManyRequests;
     case "auth/network-request-failed":
-      return "网络连接失败，请稍后重试";
+      return i18n.errors.authNetworkFailed;
     case "auth/requires-recent-login":
-      return "请重新登录后再操作";
+      return i18n.errors.authRequiresRecentLogin;
     default:
-      return errorMessage(caught);
+      return errorMessage(caught, i18n);
   }
 }
 
-function cloudActivationErrorMessage(caught: unknown): string {
+function cloudActivationErrorMessage(caught: unknown, i18n: I18nMessages): string {
   const code = errorCode(caught);
   if (isFirestoreOfflineError(caught) || code === "not-found" || code === "failed-precondition") {
-    return "已登录，但暂时无法开启云同步。请确认 Firebase 项目已创建 Firestore 默认数据库，并已部署 Firestore/Storage 规则。";
+    return i18n.errors.cloudActivationUnavailable;
   }
   if (code === "permission-denied") {
-    return "已登录，但云同步权限被拒绝。请确认 Firestore/Storage 规则已部署到当前 Firebase 项目。";
+    return i18n.errors.cloudActivationPermission;
   }
-  return `已登录，但暂时无法开启云同步：${errorMessage(caught)}`;
+  return i18n.errors.cloudActivationGeneric(errorMessage(caught, i18n));
 }
 
 function errorCode(caught: unknown): string | null {
