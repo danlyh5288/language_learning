@@ -113,6 +113,33 @@ button {
   font-size: 12px;
 }
 
+.locale-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin: 12px 6px 0;
+  padding: 3px;
+  background: #edf4f1;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.locale-switch button {
+  min-height: 28px;
+  color: var(--muted);
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.locale-switch button[aria-pressed="true"] {
+  color: var(--primary-strong);
+  background: var(--surface);
+  box-shadow: 0 1px 4px rgba(24, 33, 31, 0.08);
+}
+
 .account-dock {
   display: grid;
   gap: 10px;
