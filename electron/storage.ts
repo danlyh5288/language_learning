@@ -8,6 +8,7 @@ import {
   type RecordingSaveInput,
   type TagRecord,
   UNTAGGED_FILTER_ID,
+  type VocabularyLibrary,
   type WordInput,
   type WordListFilters,
   type WordRecord
@@ -28,6 +29,13 @@ export class VocabularyStore {
     this.dbPath = dbPath;
     this.recordingsDir = recordingsDir;
     this.migrate();
+  }
+
+  loadVocabulary(): VocabularyLibrary {
+    return {
+      words: this.listWords(),
+      tags: this.listTags()
+    };
   }
 
   listWords(filters: WordListFilters = {}): WordRecord[] {

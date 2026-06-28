@@ -18,13 +18,14 @@ import {
   type CloudSyncStatus,
   type CloudUser,
   type TagRecord,
-  UNTAGGED_FILTER_ID,
   type WordInput,
   type WordListFilters
 } from "../../../shared/types";
+import { filterWords } from "../../../shared/vocabulary";
 import type {
   DeletedWordResult,
   MobileWordRecord,
+  MobileVocabularyLibrary,
   RepositoryChangeListener,
   RepositoryUnsubscribe,
   RecordingReplacementResult,
@@ -94,22 +95,43 @@ export class FirebaseVocabularyRepository implements VocabularyRepositoryApi {
 
   subscribe(listener: RepositoryChangeListener): RepositoryUnsubscribe {
     const uid = requireUid(this.auth.currentUser);
+    const initialized = { tags: false, words: false };
+    let notifyTimer: ReturnType<typeof setTimeout> | null = null;
+    const notify = () => {
+      if (notifyTimer) {
+        return;
+      }
+      notifyTimer = setTimeout(() => {
+        notifyTimer = null;
+        listener();
+      }, 0);
+    };
+    const notifyAfterInitial = (key: keyof typeof initialized) => () => {
+      if (!initialized[key]) {
+        initialized[key] = true;
+        return;
+      }
+      notify();
+    };
     const unsubscribeTags = this.firestore.collection(userTagsPath(uid)).where("deletedAt", "==", null).onSnapshot(
-      () => listener(),
-      () => listener()
+      notifyAfterInitial("tags"),
+      notify
     );
     const unsubscribeWords = this.firestore.collection(userWordsPath(uid)).where("deletedAt", "==", null).onSnapshot(
-      () => listener(),
-      () => listener()
+      notifyAfterInitial("words"),
+      notify
     );
 
     return () => {
+      if (notifyTimer) {
+        clearTimeout(notifyTimer);
+      }
       unsubscribeTags();
       unsubscribeWords();
     };
   }
 
-  async listWords(filters: WordListFilters = {}): Promise<MobileWordRecord[]> {
+  async loadVocabulary(): Promise<MobileVocabularyLibrary> {
     const uid = requireUid(this.auth.currentUser);
     await this.processRecordingQueue().catch(() => undefined);
     const [tagSnapshot, wordSnapshot, queued] = await Promise.all([
@@ -117,9 +139,9 @@ export class FirebaseVocabularyRepository implements VocabularyRepositoryApi {
       this.firestore.collection(userWordsPath(uid)).where("deletedAt", "==", null).get(),
       listQueuedRecordings(this.queueDb, uid)
     ]);
-    const tags = new Map<string, TagRecord>();
+    const tagsById = new Map<string, TagRecord>();
     tagSnapshot.docs.forEach((docSnapshot) => {
-      tags.set(docSnapshot.id, cloudTagToRecord(
+      tagsById.set(docSnapshot.id, cloudTagToRecord(
         docSnapshot.id,
         docSnapshot.data() as CloudTagDocument,
         0,
@@ -128,13 +150,13 @@ export class FirebaseVocabularyRepository implements VocabularyRepositoryApi {
     });
     const queuedByWordId = new Map(queued.map((upload) => [String(upload.word_id), upload]));
 
-    return wordSnapshot.docs
+    const words = wordSnapshot.docs
       .map((docSnapshot) => {
         const data = docSnapshot.data() as CloudWordDocument;
         const word = cloudWordToRecord(
           docSnapshot.id,
           data,
-          tags.get(data.tagId ?? "") ?? null,
+          tagsById.get(data.tagId ?? "") ?? null,
           docSnapshot.metadata.hasPendingWrites
         ) as MobileWordRecord;
         const queuedUpload = queuedByWordId.get(word.id);
@@ -147,24 +169,26 @@ export class FirebaseVocabularyRepository implements VocabularyRepositoryApi {
           recordingUploadStatus: queuedUpload ? (queuedUpload.error ? "failed" : "queued") : word.recordingUploadStatus
         };
       })
-      .filter((word) => matchesFilters(word, filters))
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    const wordCounts = new Map<string, number>();
+    words.forEach((word) => {
+      if (word.tagId) {
+        wordCounts.set(word.tagId, (wordCounts.get(word.tagId) ?? 0) + 1);
+      }
+    });
+    const tags = Array.from(tagsById.values())
+      .map((tag) => ({ ...tag, wordCount: wordCounts.get(tag.id) ?? 0 }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    return { words, tags };
+  }
+
+  async listWords(filters: WordListFilters = {}): Promise<MobileWordRecord[]> {
+    return filterWords((await this.loadVocabulary()).words, filters);
   }
 
   async listTags(): Promise<TagRecord[]> {
-    const uid = requireUid(this.auth.currentUser);
-    const [tags, words] = await Promise.all([
-      this.firestore.collection(userTagsPath(uid)).where("deletedAt", "==", null).get(),
-      this.listWords()
-    ]);
-    return tags.docs
-      .map((docSnapshot) => cloudTagToRecord(
-        docSnapshot.id,
-        docSnapshot.data() as CloudTagDocument,
-        words.filter((word) => word.tagId === docSnapshot.id).length,
-        docSnapshot.metadata.hasPendingWrites
-      ))
-      .sort((a, b) => a.name.localeCompare(b.name));
+    return (await this.loadVocabulary()).tags;
   }
 
   async createTag(name: string): Promise<TagRecord> {
@@ -173,11 +197,11 @@ export class FirebaseVocabularyRepository implements VocabularyRepositoryApi {
     if (!normalizedName) {
       throw new Error("标签名称不能为空");
     }
-    const existing = (await this.listTags()).find((tag) => tag.name.toLowerCase() === normalizedName.toLowerCase());
+    const tags = await this.listTags();
+    const existing = tags.find((tag) => tag.name.toLowerCase() === normalizedName.toLowerCase());
     if (existing) {
       return existing;
     }
-    const tags = await this.listTags();
     const now = new Date().toISOString();
     const id = createId();
     const tagDoc: CloudTagDocument = {
@@ -375,29 +399,6 @@ function normalizeWordText(text: string): string {
 
 function normalizeTagId(tagId: string | null): string | null {
   return tagId && tagId.trim() ? tagId : null;
-}
-
-function matchesFilters(word: MobileWordRecord, filters: WordListFilters): boolean {
-  const query = filters.query?.trim() ?? "";
-  const lowerQuery = query.toLowerCase();
-  if (filters.tagId === UNTAGGED_FILTER_ID && word.tagId !== null) {
-    return false;
-  }
-  if (filters.tagId && filters.tagId !== UNTAGGED_FILTER_ID && word.tagId !== filters.tagId) {
-    return false;
-  }
-  if (query.startsWith("#")) {
-    const tagQuery = query.slice(1).trim().toLowerCase();
-    return tagQuery.length === 0 || (word.tagName ?? "").toLowerCase().includes(tagQuery);
-  }
-  if (!lowerQuery) {
-    return true;
-  }
-  return (
-    word.text.toLowerCase().includes(lowerQuery) ||
-    word.toneNote.toLowerCase().includes(lowerQuery) ||
-    (word.tagName ?? "").toLowerCase().includes(lowerQuery)
-  );
 }
 
 async function listQueuedRecordings(db: VocabDatabase, uid: string): Promise<UploadRow[]> {

@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.1.8 - 2026-06-28
+
+### Changed
+
+- Reduce Firestore vocabulary reads by loading tags and words once per refresh, filtering locally, and ignoring initial snapshot callbacks.
+- Bump the macOS DMG package version to `0.1.8`.
+
 ## 0.1.7 - 2026-06-28
 
 ### Added

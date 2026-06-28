@@ -24,6 +24,11 @@ export type TagRecord = {
   hasPendingWrites?: boolean;
 };
 
+export type VocabularyLibrary = {
+  words: WordRecord[];
+  tags: TagRecord[];
+};
+
 export type WordListFilters = {
   query?: string;
   tagId?: string | null;
@@ -120,6 +125,9 @@ export type MonitorSubmitResult = {
 };
 
 export type VocabApi = {
+  vocabulary: {
+    load(): Promise<VocabularyLibrary>;
+  };
   words: {
     list(filters?: WordListFilters): Promise<WordRecord[]>;
     create(input: WordInput): Promise<WordRecord>;

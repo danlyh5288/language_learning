@@ -137,8 +137,73 @@ describe("Firebase cloud API", () => {
     await expect(api.words.list()).resolves.toEqual([]);
 
     expect(localApi.words.list).not.toHaveBeenCalled();
-    expect(firebaseMocks.getDocs).toHaveBeenCalled();
+    expect(firebaseMocks.getDocs).toHaveBeenCalledTimes(2);
     expect(localStorage.getItem("pronunciation-vault-cloud-mode")).toBe("cloud");
+  });
+
+  it("loads cloud vocabulary with one tag query and one word query", async () => {
+    localStorage.setItem("pronunciation-vault-cloud-mode", "cloud");
+    firebaseMocks.getDocs.mockImplementation(async (target) => {
+      const path = target.collectionRef?.path ?? target.path;
+      if (path === "users/user-1/tags") {
+        return {
+          docs: [{
+            id: "tag-1",
+            data: () => ({
+              name: "日常",
+              color: "#059669",
+              createdAt: "2026-06-24T10:00:00.000Z",
+              updatedAt: "2026-06-24T10:00:00.000Z",
+              deletedAt: null
+            }),
+            metadata: { hasPendingWrites: false }
+          }]
+        };
+      }
+      return {
+        docs: [{
+          id: "word-1",
+          data: () => ({
+            text: "侬好",
+            tagId: "tag-1",
+            toneNote: "开口轻一点",
+            recording: null,
+            createdAt: "2026-06-24T10:00:00.000Z",
+            updatedAt: "2026-06-24T10:01:00.000Z",
+            deletedAt: null
+          }),
+          metadata: { hasPendingWrites: false }
+        }]
+      };
+    });
+    const { createFirebaseAwareApi } = await import("./firebaseCloudApi");
+    const api = createFirebaseAwareApi(createLocalApi());
+
+    await expect(api.vocabulary.load()).resolves.toEqual({
+      tags: [{
+        id: "tag-1",
+        name: "日常",
+        color: "#059669",
+        wordCount: 1,
+        hasPendingWrites: false
+      }],
+      words: [{
+        id: "word-1",
+        text: "侬好",
+        tagId: "tag-1",
+        tagName: "日常",
+        tagColor: "#059669",
+        toneNote: "开口轻一点",
+        audioDurationMs: null,
+        hasRecording: false,
+        createdAt: "2026-06-24T10:00:00.000Z",
+        updatedAt: "2026-06-24T10:01:00.000Z",
+        syncSource: "cloud",
+        hasPendingWrites: false,
+        recordingUploadStatus: undefined
+      }]
+    });
+    expect(firebaseMocks.getDocs).toHaveBeenCalledTimes(2);
   });
 
   it("signs in without blocking on cloud activation", async () => {
@@ -252,17 +317,28 @@ describe("Firebase cloud API", () => {
     expect(localStorage.getItem("pronunciation-vault-cloud-mode")).toBe("cloud");
   });
 
-  it("subscribes to cloud tag and word snapshots", async () => {
+  it("skips initial cloud snapshots and coalesces later changes", async () => {
     localStorage.setItem("pronunciation-vault-cloud-mode", "cloud");
+    const snapshotHandlers: Array<() => void> = [];
+    firebaseMocks.onSnapshot.mockImplementation((_query, next) => {
+      snapshotHandlers.push(next);
+      next();
+      return vi.fn();
+    });
     const { createFirebaseAwareApi } = await import("./firebaseCloudApi");
     const listener = vi.fn();
     const api = createFirebaseAwareApi(createLocalApi());
 
     const unsubscribe = await api.cloudSync?.subscribe?.(listener);
-    unsubscribe?.();
 
     expect(firebaseMocks.onSnapshot).toHaveBeenCalledTimes(2);
-    expect(listener).toHaveBeenCalledTimes(2);
+    expect(listener).not.toHaveBeenCalled();
+
+    snapshotHandlers.forEach((handler) => handler());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    unsubscribe?.();
   });
 
   it("keeps a persisted auth user whose last sign-in is within 30 days", async () => {
@@ -340,10 +416,17 @@ describe("Firebase cloud API", () => {
 
 function createLocalApi(options: {
   words?: Awaited<ReturnType<VocabApi["words"]["list"]>>;
+  tags?: Awaited<ReturnType<VocabApi["tags"]["list"]>>;
   recordingData?: Awaited<ReturnType<NonNullable<VocabApi["recordings"]["readForWord"]>>>;
   recordingReadError?: Error;
 } = {}): VocabApi {
   return {
+    vocabulary: {
+      load: vi.fn(async () => ({
+        words: options.words ?? [],
+        tags: options.tags ?? []
+      }))
+    },
     words: {
       list: vi.fn(async () => options.words ?? []),
       create: vi.fn(),
@@ -351,7 +434,7 @@ function createLocalApi(options: {
       delete: vi.fn()
     },
     tags: {
-      list: vi.fn(async () => []),
+      list: vi.fn(async () => options.tags ?? []),
       create: vi.fn()
     },
     recordings: {

@@ -1,9 +1,11 @@
 import { Alert } from "react-native";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
-import { UNTAGGED_FILTER_ID, type TagRecord, type WordInput, type WordListFilters } from "../../../shared/types";
+import { type TagRecord, type WordInput, type WordListFilters } from "../../../shared/types";
+import { filterWords } from "../../../shared/vocabulary";
 import type {
   DeletedWordResult,
   MobileWordRecord,
+  MobileVocabularyLibrary,
   RecordingFileStore,
   RepositoryChangeListener,
   RecordingReplacementResult,
@@ -22,6 +24,7 @@ function createFileStore(): RecordingFileStore {
 class FakeRepository implements VocabularyRepositoryApi {
   tags: TagRecord[];
   words: MobileWordRecord[];
+  loadCount = 0;
   private listeners = new Set<RepositoryChangeListener>();
   private nextId = 1;
 
@@ -30,32 +33,16 @@ class FakeRepository implements VocabularyRepositoryApi {
     this.words = seed?.words ?? [];
   }
 
-  async listWords(filters: WordListFilters = {}): Promise<MobileWordRecord[]> {
-    const query = filters.query?.trim() ?? "";
-    const lowerQuery = query.toLowerCase();
+  async loadVocabulary(): Promise<MobileVocabularyLibrary> {
+    this.loadCount += 1;
+    return {
+      words: this.withFreshTags().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+      tags: await this.listTags()
+    };
+  }
 
-    return this.withFreshTags()
-      .filter((word) => {
-        if (filters.tagId === UNTAGGED_FILTER_ID && word.tagId !== null) {
-          return false;
-        }
-        if (filters.tagId && filters.tagId !== UNTAGGED_FILTER_ID && word.tagId !== filters.tagId) {
-          return false;
-        }
-        if (query.startsWith("#")) {
-          const tagQuery = query.slice(1).trim().toLowerCase();
-          return tagQuery.length === 0 || (word.tagName ?? "").toLowerCase().includes(tagQuery);
-        }
-        if (!lowerQuery) {
-          return true;
-        }
-        return (
-          word.text.toLowerCase().includes(lowerQuery) ||
-          word.toneNote.toLowerCase().includes(lowerQuery) ||
-          (word.tagName ?? "").toLowerCase().includes(lowerQuery)
-        );
-      })
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  async listWords(filters: WordListFilters = {}): Promise<MobileWordRecord[]> {
+    return filterWords(this.withFreshTags(), filters);
   }
 
   async listTags(): Promise<TagRecord[]> {
@@ -190,12 +177,14 @@ describe("VocabularyScreen", () => {
 
     expect(await view.findByText("侬好")).toBeTruthy();
     expect(view.getByText("辰光")).toBeTruthy();
+    expect(repository.loadCount).toBe(1);
 
     await fireEvent.changeText(view.getByLabelText("搜索词条"), "辰光");
 
     expect(await view.findByText("1 个词条")).toBeTruthy();
     expect(view.getByText("辰光")).toBeTruthy();
     expect(view.queryByText("侬好")).toBeNull();
+    expect(repository.loadCount).toBe(1);
   });
 
   it("reloads words when the repository emits a change", async () => {

@@ -8,6 +8,7 @@ import type { SQLiteDatabase } from "expo-sqlite";
 import type {
   DeletedWordResult,
   MobileWordRecord,
+  MobileVocabularyLibrary,
   RecordingReplacementResult,
   SavedRecordingInput,
   SqlValue,
@@ -75,6 +76,11 @@ export async function migrateVocabularyDb(db: VocabDatabase): Promise<void> {
 
 export class VocabularyRepository implements VocabularyRepositoryApi {
   constructor(private readonly db: VocabDatabase) {}
+
+  async loadVocabulary(): Promise<MobileVocabularyLibrary> {
+    const [words, tags] = await Promise.all([this.listWords(), this.listTags()]);
+    return { words, tags };
+  }
 
   async listWords(filters: WordListFilters = {}): Promise<MobileWordRecord[]> {
     const where: string[] = [];

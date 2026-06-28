@@ -14,6 +14,11 @@ export type MobileWordRecord = WordRecord & {
   audioMimeType: string | null;
 };
 
+export type MobileVocabularyLibrary = {
+  words: MobileWordRecord[];
+  tags: TagRecord[];
+};
+
 export type PendingRecording = {
   uri: string;
   durationMs: number;
@@ -38,6 +43,7 @@ export type RepositoryChangeListener = () => void;
 export type RepositoryUnsubscribe = () => void;
 
 export type VocabularyRepositoryApi = {
+  loadVocabulary(): Promise<MobileVocabularyLibrary>;
   listWords(filters?: WordListFilters): Promise<MobileWordRecord[]>;
   listTags(): Promise<TagRecord[]>;
   createTag(name: string): Promise<TagRecord>;
