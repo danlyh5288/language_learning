@@ -51,7 +51,10 @@ describe("Pronunciation vault MVP", () => {
 
     const { unmount } = render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "中文" }));
+    const account = await screen.findByRole("region", { name: "Account" });
+    await user.click(within(account).getByRole("button", { name: /Sign in \/ Sign up/ }));
+    const menu = await screen.findByRole("menu");
+    await user.click(within(menu).getByRole("menuitemradio", { name: "中文" }));
 
     expect(await screen.findByRole("heading", { name: "发音词库" })).toBeInTheDocument();
     expect(document.title).toBe("发音词库");

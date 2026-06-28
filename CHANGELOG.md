@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.1.7 - 2026-06-28
+
+### Added
+
+- Add a Radix Dropdown Menu account entry for desktop account, language, cloud sync, and diagnostics actions.
+
+### Changed
+
+- Move desktop language selection and cloud sync controls into the lower-left account menu.
+- Bump the macOS DMG package version to `0.1.7`.
+
 ## 0.1.6 - 2026-06-28
 
 ### Added

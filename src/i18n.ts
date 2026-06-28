@@ -75,6 +75,9 @@ export type I18nMessages = {
   };
   account: {
     ariaLabel: string;
+    signedOutTrigger: string;
+    language: string;
+    cloudSync: string;
     signUp: string;
     signIn: string;
     signedIn: string;
@@ -85,6 +88,7 @@ export type I18nMessages = {
     refreshCloudSync: string;
     diagnostics: string;
     signOut: string;
+    signOutShort: string;
     localMode: string;
     signedInCloudDisabled: string;
     cloudModeSynced: string;
@@ -235,6 +239,9 @@ const enMessages: I18nMessages = {
   },
   account: {
     ariaLabel: "Account",
+    signedOutTrigger: "Sign in / Sign up",
+    language: "Language",
+    cloudSync: "Cloud sync",
     signUp: "Sign up",
     signIn: "Sign in",
     signedIn: "Signed in",
@@ -245,6 +252,7 @@ const enMessages: I18nMessages = {
     refreshCloudSync: "Refresh cloud sync",
     diagnostics: "Diagnostics",
     signOut: "Sign out of cloud account",
+    signOutShort: "Sign out",
     localMode: "Local mode",
     signedInCloudDisabled: "Signed in · cloud sync disabled",
     cloudModeSynced: "Cloud mode · synced",
@@ -410,6 +418,9 @@ const zhMessages: I18nMessages = {
   },
   account: {
     ariaLabel: "账户",
+    signedOutTrigger: "登录 / 注册",
+    language: "语言",
+    cloudSync: "云同步",
     signUp: "注册",
     signIn: "登录",
     signedIn: "已登录",
@@ -420,6 +431,7 @@ const zhMessages: I18nMessages = {
     refreshCloudSync: "刷新云同步",
     diagnostics: "诊断",
     signOut: "退出云端账号",
+    signOutShort: "退出登录",
     localMode: "本地模式",
     signedInCloudDisabled: "已登录 · 云同步已停用",
     cloudModeSynced: "云端模式 · 已同步",

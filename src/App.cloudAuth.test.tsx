@@ -111,6 +111,18 @@ vi.mock("./api", () => ({
 
 import App from "./App";
 
+async function openAccountMenu(
+  user: ReturnType<typeof userEvent.setup>,
+  triggerName: string | RegExp = /Sign in \/ Sign up|learner/
+) {
+  const account = await screen.findByRole("region", { name: "Account" });
+  await user.click(within(account).getByRole("button", { name: triggerName }));
+  return {
+    account,
+    menu: await screen.findByRole("menu")
+  };
+}
+
 describe("Cloud auth panel", () => {
   beforeEach(() => {
     Object.assign(mockApi.status, {
@@ -184,13 +196,13 @@ describe("Cloud auth panel", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    const account = await screen.findByRole("region", { name: "Account" });
+    const { account, menu } = await openAccountMenu(user);
 
-    expect(within(account).getByRole("button", { name: "Sign up" })).toBeEnabled();
-    expect(within(account).getByRole("button", { name: "Sign in" })).toBeEnabled();
+    expect(within(menu).getByRole("menuitem", { name: "Sign up" })).not.toHaveAttribute("aria-disabled", "true");
+    expect(within(menu).getByRole("menuitem", { name: "Sign in" })).not.toHaveAttribute("aria-disabled", "true");
     expect(screen.queryByLabelText("Cloud sync email")).not.toBeInTheDocument();
 
-    await user.click(within(account).getByRole("button", { name: "Sign in" }));
+    await user.click(within(menu).getByRole("menuitem", { name: "Sign in" }));
 
     const modal = await screen.findByRole("dialog", { name: "Sign in" });
     const submitButton = within(modal).getByRole("button", { name: "Sign in" });
@@ -214,7 +226,7 @@ describe("Cloud auth panel", () => {
       email: "learner@example.com",
       password: "123456"
     });
-    expect(await screen.findByRole("region", { name: "Account" })).toHaveTextContent("learner@example.com");
+    expect(await within(account).findByText("learner")).toBeInTheDocument();
     expect(await screen.findByText("Signed in with cloud sync enabled")).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Sign in" })).not.toBeInTheDocument();
   });
@@ -225,8 +237,8 @@ describe("Cloud auth panel", () => {
 
     render(<App />);
 
-    const account = await screen.findByRole("region", { name: "Account" });
-    await user.click(within(account).getByRole("button", { name: "Sign up" }));
+    const { menu } = await openAccountMenu(user);
+    await user.click(within(menu).getByRole("menuitem", { name: "Sign up" }));
 
     const modal = await screen.findByRole("dialog", { name: "Sign up" });
     await user.type(within(modal).getByLabelText("Cloud sync email"), "learner@example.com");
@@ -242,19 +254,20 @@ describe("Cloud auth panel", () => {
 
     render(<App />);
 
-    const account = await screen.findByRole("region", { name: "Account" });
-    await user.click(within(account).getByRole("button", { name: "Sign in" }));
+    const { account, menu } = await openAccountMenu(user);
+    await user.click(within(menu).getByRole("menuitem", { name: "Sign in" }));
 
     const modal = await screen.findByRole("dialog", { name: "Sign in" });
     await user.type(within(modal).getByLabelText("Cloud sync email"), "learner@example.com");
     await user.type(within(modal).getByLabelText("Cloud sync password"), "123456");
     await user.click(within(modal).getByRole("button", { name: "Sign in" }));
 
-    expect(await within(account).findByText("learner@example.com")).toBeInTheDocument();
+    expect(await within(account).findByText("learner")).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Sign in" })).not.toBeInTheDocument();
     expect(mockApi.enable).toHaveBeenCalledTimes(1);
     expect(await within(account).findByRole("alert")).toHaveTextContent("Signed in, but cloud sync could not be enabled");
-    expect(within(account).getByRole("button", { name: "Enable" })).toBeEnabled();
+    const reopened = await openAccountMenu(user, /learner/);
+    expect(within(reopened.menu).getByRole("menuitem", { name: "Enable" })).not.toHaveAttribute("aria-disabled", "true");
   });
 
   it("keeps passive cloud status failures out of the account dock after sign-in", async () => {
@@ -265,18 +278,19 @@ describe("Cloud auth panel", () => {
 
     render(<App />);
 
-    const account = await screen.findByRole("region", { name: "Account" });
-    await user.click(within(account).getByRole("button", { name: "Sign in" }));
+    const { account, menu } = await openAccountMenu(user);
+    await user.click(within(menu).getByRole("menuitem", { name: "Sign in" }));
 
     const modal = await screen.findByRole("dialog", { name: "Sign in" });
     await user.type(within(modal).getByLabelText("Cloud sync email"), "learner@example.com");
     await user.type(within(modal).getByLabelText("Cloud sync password"), "123456");
     await user.click(within(modal).getByRole("button", { name: "Sign in" }));
 
-    expect(await within(account).findByText("learner@example.com")).toBeInTheDocument();
+    expect(await within(account).findByText("learner")).toBeInTheDocument();
     await waitFor(() => expect(mockApi.getStatus).toHaveBeenCalledTimes(3));
-    expect(within(account).queryByRole("button", { name: "Sign up" })).not.toBeInTheDocument();
-    expect(within(account).queryByRole("button", { name: "Sign in" })).not.toBeInTheDocument();
+    const reopened = await openAccountMenu(user, /learner/);
+    expect(within(reopened.menu).queryByRole("menuitem", { name: "Sign up" })).not.toBeInTheDocument();
+    expect(within(reopened.menu).queryByRole("menuitem", { name: "Sign in" })).not.toBeInTheDocument();
     expect(within(account).queryByRole("alert")).not.toBeInTheDocument();
   });
 
@@ -290,8 +304,8 @@ describe("Cloud auth panel", () => {
 
     render(<App />);
 
-    const account = await screen.findByRole("region", { name: "Account" });
-    await user.click(within(account).getByRole("button", { name: "Refresh cloud sync" }));
+    const { account, menu } = await openAccountMenu(user, /learner/);
+    await user.click(within(menu).getByRole("menuitem", { name: "Refresh cloud sync" }));
 
     expect(await within(account).findByRole("alert")).toHaveTextContent("Cannot connect to Firebase. Check your network and try again.");
   });
@@ -309,12 +323,14 @@ describe("Cloud auth panel", () => {
 
     const account = await screen.findByRole("region", { name: "Account" });
     expect(await within(account).findByText("Cloud mode · synced")).toBeInTheDocument();
-    expect(within(account).getByText("learner@example.com")).toBeInTheDocument();
+    expect(within(account).getByText("learner")).toBeInTheDocument();
     expect(within(account).queryByRole("button", { name: "Sign up" })).not.toBeInTheDocument();
     expect(within(account).queryByRole("button", { name: "Sign in" })).not.toBeInTheDocument();
-    expect(within(account).getByRole("button", { name: "Disable" })).toBeEnabled();
+    const { menu } = await openAccountMenu(user, /learner/);
+    expect(within(menu).getByText("learner@example.com")).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "Disable" })).not.toHaveAttribute("aria-disabled", "true");
 
-    await user.click(within(account).getByRole("button", { name: "Resend verification email" }));
+    await user.click(within(menu).getByRole("menuitem", { name: "Resend verification email" }));
 
     expect(mockApi.sendVerificationEmail).toHaveBeenCalledTimes(1);
     expect(await within(account).findByText("Verification email sent")).toBeInTheDocument();
@@ -352,8 +368,8 @@ describe("Cloud auth panel", () => {
 
     render(<App />);
 
-    const account = await screen.findByRole("region", { name: "Account" });
-    await user.click(within(account).getByRole("button", { name: "Diagnostics" }));
+    const { menu } = await openAccountMenu(user, /learner/);
+    await user.click(within(menu).getByRole("menuitem", { name: "Diagnostics" }));
 
     const dialog = await screen.findByRole("dialog", { name: "Service health" });
     expect(await within(dialog).findByText("degraded")).toBeInTheDocument();
@@ -378,8 +394,8 @@ describe("Cloud auth panel", () => {
 
     render(<App />);
 
-    const account = await screen.findByRole("region", { name: "Account" });
-    await user.click(within(account).getByRole("button", { name: "Diagnostics" }));
+    const { menu } = await openAccountMenu(user, /learner/);
+    await user.click(within(menu).getByRole("menuitem", { name: "Diagnostics" }));
 
     const dialog = await screen.findByRole("dialog", { name: "Service health" });
     await user.click(await within(dialog).findByRole("button", { name: "Submit" }));
