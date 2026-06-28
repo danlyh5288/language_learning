@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.1.6 - 2026-06-28
+
+### Added
+
+- Add desktop English/Chinese localization with English as the default.
+- Add Radix UI Dialog and Select primitives for desktop modals and tag selection.
+
+### Changed
+
+- Bump the macOS DMG package version to `0.1.6`.
+
 ## 0.1.5 - 2026-06-26
 
 ### Fixed
