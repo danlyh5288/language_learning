@@ -84,6 +84,8 @@ function setupProtocol(vocabularyStore: VocabularyStore): void {
 }
 
 function setupIpc(vocabularyStore: VocabularyStore): void {
+  ipcMain.handle("vocabulary:load", () => vocabularyStore.loadVocabulary());
+
   ipcMain.handle("words:list", (_event, filters?: WordListFilters) => vocabularyStore.listWords(filters));
   ipcMain.handle("words:create", (_event, input: WordInput) => vocabularyStore.createWord(input));
   ipcMain.handle("words:update", (_event, id: string, input: WordInput) => vocabularyStore.updateWord(id, input));

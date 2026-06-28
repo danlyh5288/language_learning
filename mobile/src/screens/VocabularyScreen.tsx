@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { type TagRecord, UNTAGGED_FILTER_ID, type WordInput } from "../../../shared/types";
+import { filterWords } from "../../../shared/vocabulary";
 import { AlertCircle, Check, ChevronLeft, ListMusic, Plus, Search, Tag, Trash2, X } from "../components/icons";
 import { errorMessage, formatDuration } from "../format";
 import { colors, styles } from "../theme";
@@ -38,7 +39,6 @@ type VocabularyScreenProps = {
 };
 
 export function VocabularyScreen({ repository, recordingFiles }: VocabularyScreenProps) {
-  const [words, setWords] = useState<MobileWordRecord[]>([]);
   const [allWords, setAllWords] = useState<MobileWordRecord[]>([]);
   const [tags, setTags] = useState<TagRecord[]>([]);
   const [query, setQuery] = useState("");
@@ -57,15 +57,10 @@ export function VocabularyScreen({ repository, recordingFiles }: VocabularyScree
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [nextWords, nextTags, nextAllWords] = await Promise.all([
-        repository.listWords({ query, tagId: activeTagId }),
-        repository.listTags(),
-        repository.listWords()
-      ]);
+      const { words: nextAllWords, tags: nextTags } = await repository.loadVocabulary();
       if (!mountedRef.current) {
         return;
       }
-      setWords(nextWords);
       setTags(nextTags);
       setAllWords(nextAllWords);
       setError(null);
@@ -74,7 +69,7 @@ export function VocabularyScreen({ repository, recordingFiles }: VocabularyScree
     } finally {
       setIsLoading(false);
     }
-  }, [activeTagId, query, repository]);
+  }, [repository]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -108,6 +103,7 @@ export function VocabularyScreen({ repository, recordingFiles }: VocabularyScree
     setSelectedWord(freshWord);
   }, [allWords, selectedWord]);
 
+  const words = useMemo(() => filterWords(allWords, { query, tagId: activeTagId }), [activeTagId, allWords, query]);
   const untaggedCount = useMemo(() => allWords.filter((word) => !word.tagId).length, [allWords]);
   const duplicateWord = useMemo(() => {
     if (isSaving) {

@@ -4,12 +4,13 @@ import {
   type MonitorSnapshot,
   type RecordingSaveInput,
   type TagRecord,
-  UNTAGGED_FILTER_ID,
   type VocabApi,
+  type VocabularyLibrary,
   type WordInput,
   type WordListFilters,
   type WordRecord
 } from "../shared/types";
+import { filterWords } from "../shared/vocabulary";
 
 type PreviewWord = WordRecord & {
   previewUrl?: string;
@@ -38,6 +39,9 @@ function createLazyFirebaseApi(localApi: VocabApi): VocabApi {
   };
 
   return {
+    vocabulary: {
+      load: async () => shouldUseCloud() ? (await getCloudApi()).vocabulary.load() : localApi.vocabulary.load()
+    },
     words: {
       list: async (filters?: WordListFilters) => shouldUseCloud() ? (await getCloudApi()).words.list(filters) : localApi.words.list(filters),
       create: async (input: WordInput) => shouldUseCloud() ? (await getCloudApi()).words.create(input) : localApi.words.create(input),
@@ -137,8 +141,11 @@ function localHealthCheck(service: HealthCheckResult["service"], status: HealthS
 
 function createPreviewApi(): VocabApi {
   return {
+    vocabulary: {
+      load: async () => clonePreviewLibrary(loadPreviewState())
+    },
     words: {
-      list: async (filters?: WordListFilters) => filterWords(loadPreviewState(), filters),
+      list: async (filters?: WordListFilters) => filterWords(clonePreviewLibrary(loadPreviewState()).words, filters),
       create: async (input: WordInput) => {
         const state = loadPreviewState();
         const now = new Date().toISOString();
@@ -186,7 +193,7 @@ function createPreviewApi(): VocabApi {
       }
     },
     tags: {
-      list: async () => loadPreviewState().tags.map((tag) => ({ ...tag })),
+      list: async () => clonePreviewLibrary(loadPreviewState()).tags,
       create: async (name: string) => {
         const state = loadPreviewState();
         const normalizedName = name.trim();
@@ -241,6 +248,14 @@ function createPreviewApi(): VocabApi {
         };
       }
     }
+  };
+}
+
+function clonePreviewLibrary(state: PreviewState): VocabularyLibrary {
+  const fresh = withFreshCounts(state);
+  return {
+    words: fresh.words.map((word) => ({ ...word })),
+    tags: fresh.tags.map((tag) => ({ ...tag }))
   };
 }
 
@@ -317,34 +332,6 @@ function withFreshCounts(state: PreviewState): PreviewState {
       wordCount: state.words.filter((word) => word.tagId === tag.id).length
     }))
   };
-}
-
-function filterWords(state: PreviewState, filters: WordListFilters = {}): WordRecord[] {
-  const query = filters.query?.trim() ?? "";
-  const lowerQuery = query.toLowerCase();
-
-  return state.words
-    .filter((word) => {
-      if (filters.tagId === UNTAGGED_FILTER_ID && word.tagId !== null) {
-        return false;
-      }
-      if (filters.tagId && filters.tagId !== UNTAGGED_FILTER_ID && word.tagId !== filters.tagId) {
-        return false;
-      }
-      if (query.startsWith("#")) {
-        const tagQuery = query.slice(1).trim().toLowerCase();
-        return tagQuery.length === 0 || (word.tagName ?? "").toLowerCase().includes(tagQuery);
-      }
-      if (!lowerQuery) {
-        return true;
-      }
-      return (
-        word.text.toLowerCase().includes(lowerQuery) ||
-        word.toneNote.toLowerCase().includes(lowerQuery) ||
-        (word.tagName ?? "").toLowerCase().includes(lowerQuery)
-      );
-    })
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 function tagNameForId(tags: TagRecord[], tagId: string | null): string | null {

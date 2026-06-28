@@ -20,6 +20,7 @@ const mockApi = vi.hoisted(() => {
     signedInUser,
     status,
     cloudListener: null as null | (() => void),
+    vocabularyLoad: vi.fn(async () => ({ words: [] as WordRecord[], tags: [] })),
     wordsList: vi.fn(async () => [] as WordRecord[]),
     wordsCreate: vi.fn(),
     wordsUpdate: vi.fn(),
@@ -73,6 +74,9 @@ const mockApi = vi.hoisted(() => {
 
 vi.mock("./api", () => ({
   api: {
+    vocabulary: {
+      load: mockApi.vocabularyLoad
+    },
     words: {
       list: mockApi.wordsList,
       create: mockApi.wordsCreate,
@@ -135,6 +139,8 @@ describe("Cloud auth panel", () => {
       pendingRecordingUploads: 0,
       lastSyncError: null
     } satisfies CloudSyncStatus);
+    mockApi.vocabularyLoad.mockReset();
+    mockApi.vocabularyLoad.mockResolvedValue({ words: [], tags: [] });
     mockApi.wordsList.mockClear();
     mockApi.wordsCreate.mockClear();
     mockApi.wordsUpdate.mockClear();
@@ -337,17 +343,27 @@ describe("Cloud auth panel", () => {
   });
 
   it("reloads vocabulary when cloud snapshots change", async () => {
+    const remoteWord: WordRecord = {
+      id: "word-remote",
+      text: "远端",
+      tagId: null,
+      tagName: null,
+      tagColor: null,
+      toneNote: "",
+      audioDurationMs: null,
+      hasRecording: false,
+      createdAt: "2026-06-24T10:00:00.000Z",
+      updatedAt: "2026-06-24T10:00:00.000Z"
+    };
     Object.assign(mockApi.status, {
       user: { uid: "user-1", email: "learner@example.com", emailVerified: false },
       mode: "cloud",
       isEntitled: true,
       isEnabled: true
     } satisfies Partial<CloudSyncStatus>);
-    mockApi.wordsList
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ id: "word-remote", text: "远端", tagId: null, tagName: null, tagColor: null, toneNote: "", audioDurationMs: null, hasRecording: false, createdAt: "2026-06-24T10:00:00.000Z", updatedAt: "2026-06-24T10:00:00.000Z" }])
-      .mockResolvedValueOnce([{ id: "word-remote", text: "远端", tagId: null, tagName: null, tagColor: null, toneNote: "", audioDurationMs: null, hasRecording: false, createdAt: "2026-06-24T10:00:00.000Z", updatedAt: "2026-06-24T10:00:00.000Z" }]);
+    mockApi.vocabularyLoad
+      .mockResolvedValueOnce({ words: [], tags: [] })
+      .mockResolvedValueOnce({ words: [remoteWord], tags: [] });
 
     render(<App />);
 
@@ -355,6 +371,50 @@ describe("Cloud auth panel", () => {
     mockApi.cloudListener?.();
 
     expect(await screen.findByText("远端")).toBeInTheDocument();
+  });
+
+  it("filters loaded vocabulary locally without reloading the API", async () => {
+    const user = userEvent.setup();
+    mockApi.vocabularyLoad.mockResolvedValue({
+      tags: [],
+      words: [
+        {
+          id: "word-1",
+          text: "侬好",
+          tagId: null,
+          tagName: null,
+          tagColor: null,
+          toneNote: "开口轻一点",
+          audioDurationMs: null,
+          hasRecording: false,
+          createdAt: "2026-06-24T10:00:00.000Z",
+          updatedAt: "2026-06-24T10:00:00.000Z"
+        },
+        {
+          id: "word-2",
+          text: "辰光",
+          tagId: null,
+          tagName: null,
+          tagColor: null,
+          toneNote: "第一个字不要拖长",
+          audioDurationMs: null,
+          hasRecording: false,
+          createdAt: "2026-06-24T10:01:00.000Z",
+          updatedAt: "2026-06-24T10:01:00.000Z"
+        }
+      ]
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText("侬好")).toBeInTheDocument();
+    await waitFor(() => expect(mockApi.vocabularyLoad).toHaveBeenCalledTimes(1));
+
+    await user.type(screen.getByLabelText("Search words"), "辰光");
+
+    expect(await screen.findByText("1 word")).toBeInTheDocument();
+    expect(screen.queryByText("侬好")).not.toBeInTheDocument();
+    expect(mockApi.vocabularyLoad).toHaveBeenCalledTimes(1);
   });
 
   it("opens developer diagnostics and submits the current health snapshot", async () => {
@@ -424,7 +484,7 @@ describe("Cloud auth panel", () => {
       isEntitled: true,
       isEnabled: true
     } satisfies Partial<CloudSyncStatus>);
-    mockApi.wordsList.mockResolvedValue([]);
+    mockApi.vocabularyLoad.mockResolvedValue({ words: [], tags: [] });
     mockApi.wordsCreate.mockImplementation(async () => new Promise<WordRecord>(() => undefined));
 
     render(<App />);
@@ -436,12 +496,12 @@ describe("Cloud auth panel", () => {
 
     expect(await screen.findByRole("button", { name: /Saving/ })).toBeDisabled();
 
-    mockApi.wordsList.mockResolvedValue([createdWord]);
+    mockApi.vocabularyLoad.mockResolvedValue({ words: [createdWord], tags: [] });
     await act(async () => {
       mockApi.cloudListener?.();
     });
 
-    await waitFor(() => expect(mockApi.wordsList).toHaveBeenCalledTimes(4));
+    await waitFor(() => expect(mockApi.vocabularyLoad).toHaveBeenCalledTimes(2));
     expect(screen.queryByText("Duplicate word: 谢谢")).not.toBeInTheDocument();
   });
 });

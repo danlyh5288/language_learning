@@ -46,6 +46,7 @@ import {
   type WordInput,
   type WordRecord
 } from "../shared/types";
+import { filterWords } from "../shared/vocabulary";
 
 type PendingRecording = {
   blob: Blob;
@@ -71,7 +72,6 @@ const UNTAGGED_SELECT_VALUE = "__untagged__";
 export default function App() {
   const [locale, setLocale] = useState<Locale>(readStoredLocale);
   const i18n = messages[locale];
-  const [words, setWords] = useState<WordRecord[]>([]);
   const [allWords, setAllWords] = useState<WordRecord[]>([]);
   const [tags, setTags] = useState<TagRecord[]>([]);
   const [query, setQuery] = useState("");
@@ -131,12 +131,7 @@ export default function App() {
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [nextWords, nextTags, nextAllWords] = await Promise.all([
-        api.words.list({ query, tagId: activeTagId }),
-        api.tags.list(),
-        api.words.list()
-      ]);
-      setWords(nextWords);
+      const { words: nextAllWords, tags: nextTags } = await api.vocabulary.load();
       setTags(nextTags);
       setAllWords(nextAllWords);
       setError(null);
@@ -146,7 +141,7 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
-  }, [activeTagId, i18n, loadCloudStatus, query]);
+  }, [i18n, loadCloudStatus]);
 
   useEffect(() => {
     void loadData();
@@ -233,6 +228,7 @@ export default function App() {
     };
   }, [pendingRecording]);
 
+  const words = useMemo(() => filterWords(allWords, { query, tagId: activeTagId }), [activeTagId, allWords, query]);
   const untaggedCount = useMemo(() => allWords.filter((word) => !word.tagId).length, [allWords]);
   const duplicateWord = useMemo(() => {
     if (isSaving) {

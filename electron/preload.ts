@@ -2,6 +2,9 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { RecordingSaveInput, VocabApi, WordInput, WordListFilters } from "../shared/types";
 
 const api: VocabApi = {
+  vocabulary: {
+    load: () => ipcRenderer.invoke("vocabulary:load")
+  },
   words: {
     list: (filters?: WordListFilters) => ipcRenderer.invoke("words:list", filters),
     create: (input: WordInput) => ipcRenderer.invoke("words:create", input),
