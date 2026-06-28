@@ -1,8 +1,11 @@
+import * as Dialog from "@radix-ui/react-dialog";
+import * as Select from "@radix-ui/react-select";
 import {
   Activity,
   AlertCircle,
   BookOpen,
   Check,
+  ChevronDown,
   Cloud,
   ListMusic,
   LogIn,
@@ -53,6 +56,8 @@ const emptyDraft: WordInput = {
   tagId: null,
   toneNote: ""
 };
+
+const UNTAGGED_SELECT_VALUE = "__untagged__";
 
 export default function App() {
   const [words, setWords] = useState<WordRecord[]>([]);
@@ -773,20 +778,14 @@ export default function App() {
             ) : null}
 
             <div className="field-grid">
-              <label className="field">
+              <div className="field">
                 <span>标签</span>
-                <select
-                  value={draft.tagId ?? ""}
-                  onChange={(event) => updateDraft({ tagId: event.target.value || null })}
-                >
-                  <option value="">未分类</option>
-                  {tags.map((tag) => (
-                    <option key={tag.id} value={tag.id}>
-                      {tag.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                <TagSelect
+                  value={draft.tagId}
+                  tags={tags}
+                  onChange={(tagId) => updateDraft({ tagId })}
+                />
+              </div>
 
               <div className="field">
                 <span>新建标签</span>
@@ -1011,86 +1010,83 @@ function MonitorModal({
 }: MonitorModalProps) {
   const overallStatus = snapshot ? summarizeMonitorStatus(snapshot) : "unknown";
 
-  useEffect(() => {
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") {
+  return (
+    <Dialog.Root open onOpenChange={(open) => {
+      if (!open && !busy) {
         onClose();
       }
-    }
-
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
-
-  return (
-    <div className="auth-modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <section
-        className="monitor-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="monitor-modal-title"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="auth-modal-header">
-          <div>
-            <span className="eyebrow">云同步诊断</span>
-            <h2 id="monitor-modal-title">Service health</h2>
-          </div>
-          <button className="icon-button compact" type="button" aria-label="关闭" disabled={busy} onClick={onClose}>
-            <X size={15} />
-          </button>
-        </div>
-
-        <div className="monitor-summary">
-          <span className={`health-dot ${overallStatus}`} />
-          <strong>{healthStatusLabel(overallStatus)}</strong>
-          <span>{snapshot ? new Date(snapshot.checkedAt).toLocaleString() : "尚未检查"}</span>
-        </div>
-
-        {snapshot ? (
-          <div className="monitor-grid">
-            <span>mode</span>
-            <strong>{snapshot.mode}</strong>
-            <span>platform</span>
-            <strong>{snapshot.platform}</strong>
-            <span>uid hash</span>
-            <strong>{snapshot.uidHash ?? "none"}</strong>
-            <span>recordings</span>
-            <strong>{snapshot.pendingRecordingUploads} pending · {snapshot.failedRecordingUploads} failed</strong>
-          </div>
-        ) : null}
-
-        <div className="monitor-checks">
-          {snapshot?.checks.map((check) => (
-            <div className="monitor-check-row" key={check.service}>
-              <span className={`health-dot ${check.status}`} />
-              <div>
-                <strong>{serviceLabel(check.service)}</strong>
-                <p>{check.message}</p>
-                {check.errorCode ? <code>{check.errorCode}</code> : null}
-              </div>
-              <span>{check.latencyMs === null ? "n/a" : `${check.latencyMs} ms`}</span>
+    }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="dialog-overlay" />
+        <Dialog.Content className="dialog-content monitor-modal">
+          <div className="auth-modal-header">
+            <div>
+              <span className="eyebrow">云同步诊断</span>
+              <Dialog.Title asChild>
+                <h2>Service health</h2>
+              </Dialog.Title>
             </div>
-          )) ?? (
-            <div className="monitor-empty">点击刷新获取当前健康快照</div>
-          )}
-        </div>
+            <Dialog.Close asChild>
+              <button className="icon-button compact" type="button" aria-label="关闭" disabled={busy}>
+                <X size={15} />
+              </button>
+            </Dialog.Close>
+          </div>
+          <Dialog.Description className="sr-only">
+            查看云同步服务健康状态和诊断上报结果。
+          </Dialog.Description>
 
-        {error ? <p className="cloud-feedback error" role="alert">{error}</p> : null}
-        {message && !error ? <p className="cloud-feedback ok" role="status"><Check size={14} />{message}</p> : null}
+          <div className="monitor-summary">
+            <span className={`health-dot ${overallStatus}`} />
+            <strong>{healthStatusLabel(overallStatus)}</strong>
+            <span>{snapshot ? new Date(snapshot.checkedAt).toLocaleString() : "尚未检查"}</span>
+          </div>
 
-        <div className="auth-modal-actions">
-          <button className="secondary-button" type="button" disabled={busy} onClick={onRefresh}>
-            <RefreshCw size={15} />
-            {busy ? "刷新中" : "刷新"}
-          </button>
-          <button className="primary-button" type="button" disabled={busy || !snapshot} onClick={onSubmit}>
-            <Cloud size={15} />
-            {busy ? "上报中" : "上报"}
-          </button>
-        </div>
-      </section>
-    </div>
+          {snapshot ? (
+            <div className="monitor-grid">
+              <span>mode</span>
+              <strong>{snapshot.mode}</strong>
+              <span>platform</span>
+              <strong>{snapshot.platform}</strong>
+              <span>uid hash</span>
+              <strong>{snapshot.uidHash ?? "none"}</strong>
+              <span>recordings</span>
+              <strong>{snapshot.pendingRecordingUploads} pending · {snapshot.failedRecordingUploads} failed</strong>
+            </div>
+          ) : null}
+
+          <div className="monitor-checks">
+            {snapshot?.checks.map((check) => (
+              <div className="monitor-check-row" key={check.service}>
+                <span className={`health-dot ${check.status}`} />
+                <div>
+                  <strong>{serviceLabel(check.service)}</strong>
+                  <p>{check.message}</p>
+                  {check.errorCode ? <code>{check.errorCode}</code> : null}
+                </div>
+                <span>{check.latencyMs === null ? "n/a" : `${check.latencyMs} ms`}</span>
+              </div>
+            )) ?? (
+              <div className="monitor-empty">点击刷新获取当前健康快照</div>
+            )}
+          </div>
+
+          {error ? <p className="cloud-feedback error" role="alert">{error}</p> : null}
+          {message && !error ? <p className="cloud-feedback ok" role="status"><Check size={14} />{message}</p> : null}
+
+          <div className="auth-modal-actions">
+            <button className="secondary-button" type="button" disabled={busy} onClick={onRefresh}>
+              <RefreshCw size={15} />
+              {busy ? "刷新中" : "刷新"}
+            </button>
+            <button className="primary-button" type="button" disabled={busy || !snapshot} onClick={onSubmit}>
+              <Cloud size={15} />
+              {busy ? "上报中" : "上报"}
+            </button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 
@@ -1125,17 +1121,6 @@ function AuthModal({
   const title = isSignIn ? "登录" : "注册";
   const authHelpText = passwordTooShort ? "密码至少 6 位" : "请输入邮箱和至少 6 位密码";
 
-  useEffect(() => {
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    }
-
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
-
   function submitAuth(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (canSubmitAuth) {
@@ -1144,63 +1129,112 @@ function AuthModal({
   }
 
   return (
-    <div className="auth-modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <section
-        className="auth-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="auth-modal-title"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="auth-modal-header">
-          <div>
-            <span className="eyebrow">云同步账号</span>
-            <h2 id="auth-modal-title">{title}</h2>
+    <Dialog.Root open onOpenChange={(open) => {
+      if (!open && !busy) {
+        onClose();
+      }
+    }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="dialog-overlay" />
+        <Dialog.Content className="dialog-content auth-modal">
+          <div className="auth-modal-header">
+            <div>
+              <span className="eyebrow">云同步账号</span>
+              <Dialog.Title asChild>
+                <h2>{title}</h2>
+              </Dialog.Title>
+            </div>
+            <Dialog.Close asChild>
+              <button className="icon-button compact" type="button" aria-label="关闭" disabled={busy}>
+                <X size={15} />
+              </button>
+            </Dialog.Close>
           </div>
-          <button className="icon-button compact" type="button" aria-label="关闭" disabled={busy} onClick={onClose}>
-            <X size={15} />
-          </button>
-        </div>
 
-        <form className="auth-modal-form" onSubmit={submitAuth}>
-          <label className="field compact-field">
-            <span>邮箱</span>
-            <input
-              aria-label="云同步邮箱"
-              type="email"
-              value={email}
-              placeholder="learner@example.com"
-              autoComplete="email"
-              aria-describedby="auth-modal-help"
-              onChange={(event) => onEmailChange(event.target.value)}
-            />
-          </label>
-          <label className="field compact-field">
-            <span>密码</span>
-            <input
-              aria-label="云同步密码"
-              type="password"
-              value={password}
-              placeholder="至少 6 位"
-              autoComplete={isSignIn ? "current-password" : "new-password"}
-              aria-describedby="auth-modal-help"
-              onChange={(event) => onPasswordChange(event.target.value)}
-            />
-          </label>
-          <p className="cloud-helper" id="auth-modal-help">{authHelpText}</p>
-          {error ? <p className="cloud-feedback error" role="alert">{error}</p> : null}
-          <div className="auth-modal-actions">
-            <button className="secondary-button" type="button" disabled={busy} onClick={() => onModeChange(isSignIn ? "signUp" : "signIn")}>
-              {isSignIn ? "改为注册" : "已有账号登录"}
-            </button>
-            <button className="primary-button" type="submit" disabled={!canSubmitAuth}>
-              {isSignIn ? <LogIn size={16} /> : <Plus size={16} />}
-              {busy ? "提交中" : title}
-            </button>
-          </div>
-        </form>
-      </section>
-    </div>
+          <form className="auth-modal-form" onSubmit={submitAuth}>
+            <label className="field compact-field">
+              <span>邮箱</span>
+              <input
+                aria-label="云同步邮箱"
+                type="email"
+                value={email}
+                placeholder="learner@example.com"
+                autoComplete="email"
+                aria-describedby="auth-modal-help"
+                onChange={(event) => onEmailChange(event.target.value)}
+              />
+            </label>
+            <label className="field compact-field">
+              <span>密码</span>
+              <input
+                aria-label="云同步密码"
+                type="password"
+                value={password}
+                placeholder="至少 6 位"
+                autoComplete={isSignIn ? "current-password" : "new-password"}
+                aria-describedby="auth-modal-help"
+                onChange={(event) => onPasswordChange(event.target.value)}
+              />
+            </label>
+            <Dialog.Description className="cloud-helper" id="auth-modal-help">
+              {authHelpText}
+            </Dialog.Description>
+            {error ? <p className="cloud-feedback error" role="alert">{error}</p> : null}
+            <div className="auth-modal-actions">
+              <button className="secondary-button" type="button" disabled={busy} onClick={() => onModeChange(isSignIn ? "signUp" : "signIn")}>
+                {isSignIn ? "改为注册" : "已有账号登录"}
+              </button>
+              <button className="primary-button" type="submit" disabled={!canSubmitAuth}>
+                {isSignIn ? <LogIn size={16} /> : <Plus size={16} />}
+                {busy ? "提交中" : title}
+              </button>
+            </div>
+          </form>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+type TagSelectProps = {
+  value: string | null;
+  tags: TagRecord[];
+  onChange: (tagId: string | null) => void;
+};
+
+function TagSelect({ value, tags, onChange }: TagSelectProps) {
+  return (
+    <Select.Root
+      value={value ?? UNTAGGED_SELECT_VALUE}
+      onValueChange={(nextValue) => onChange(nextValue === UNTAGGED_SELECT_VALUE ? null : nextValue)}
+    >
+      <Select.Trigger className="tag-select-trigger" aria-label="标签">
+        <Select.Value />
+        <Select.Icon className="tag-select-chevron" asChild>
+          <ChevronDown size={16} />
+        </Select.Icon>
+      </Select.Trigger>
+      <Select.Portal>
+        <Select.Content className="tag-select-content" position="popper" sideOffset={4}>
+          <Select.Viewport className="tag-select-viewport">
+            <Select.Item className="tag-select-item" value={UNTAGGED_SELECT_VALUE}>
+              <Select.ItemText>未分类</Select.ItemText>
+              <Select.ItemIndicator className="tag-select-indicator">
+                <Check size={14} />
+              </Select.ItemIndicator>
+            </Select.Item>
+            {tags.map((tag) => (
+              <Select.Item className="tag-select-item" key={tag.id} value={tag.id}>
+                <Select.ItemText>{tag.name}</Select.ItemText>
+                <Select.ItemIndicator className="tag-select-indicator">
+                  <Check size={14} />
+                </Select.ItemIndicator>
+              </Select.Item>
+            ))}
+          </Select.Viewport>
+        </Select.Content>
+      </Select.Portal>
+    </Select.Root>
   );
 }
 

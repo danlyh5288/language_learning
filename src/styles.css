@@ -52,6 +52,18 @@ button {
   border: 0;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 236px minmax(420px, 1fr) minmax(360px, 430px);
@@ -231,14 +243,19 @@ button {
   cursor: not-allowed;
 }
 
-.auth-modal-backdrop {
+.dialog-overlay {
   position: fixed;
   inset: 0;
   z-index: 20;
-  display: grid;
-  place-items: center;
-  padding: 20px;
   background: rgba(24, 33, 31, 0.24);
+}
+
+.dialog-content {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 21;
+  transform: translate(-50%, -50%);
 }
 
 .auth-modal {
@@ -793,8 +810,8 @@ button {
 }
 
 .field input,
-.field select,
-.field textarea {
+.field textarea,
+.tag-select-trigger {
   width: 100%;
   color: var(--text);
   background: #fbfdfc;
@@ -804,9 +821,27 @@ button {
 }
 
 .field input,
-.field select {
+.tag-select-trigger {
   height: 42px;
   padding: 0 11px;
+}
+
+.tag-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.tag-select-trigger[data-placeholder] {
+  color: var(--muted);
+}
+
+.tag-select-chevron {
+  flex: 0 0 auto;
+  color: var(--faint);
 }
 
 .field textarea {
@@ -817,10 +852,57 @@ button {
 }
 
 .field input:focus,
-.field select:focus,
-.field textarea:focus {
+.field textarea:focus,
+.tag-select-trigger:focus,
+.tag-select-trigger:focus-visible,
+.tag-select-trigger[data-state="open"] {
   border-color: #9bcbbd;
   box-shadow: 0 0 0 3px rgba(15, 123, 95, 0.12);
+}
+
+.tag-select-content {
+  z-index: 30;
+  width: var(--radix-select-trigger-width);
+  max-height: min(var(--radix-select-content-available-height), 260px);
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 14px 34px rgba(24, 33, 31, 0.16);
+}
+
+.tag-select-viewport {
+  padding: 4px;
+}
+
+.tag-select-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 8px;
+  color: var(--muted);
+  border-radius: 6px;
+  cursor: default;
+  font-size: 14px;
+  outline: 0;
+}
+
+.tag-select-item[data-highlighted] {
+  color: var(--text);
+  background: #f4f8f6;
+}
+
+.tag-select-item[data-state="checked"] {
+  color: var(--primary-strong);
+  font-weight: 700;
+}
+
+.tag-select-indicator {
+  display: grid;
+  place-items: center;
+  color: var(--primary);
 }
 
 .field-grid {
