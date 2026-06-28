@@ -184,27 +184,27 @@ describe("Cloud auth panel", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    const account = await screen.findByRole("region", { name: "账户" });
+    const account = await screen.findByRole("region", { name: "Account" });
 
-    expect(within(account).getByRole("button", { name: "注册" })).toBeEnabled();
-    expect(within(account).getByRole("button", { name: "登录" })).toBeEnabled();
-    expect(screen.queryByLabelText("云同步邮箱")).not.toBeInTheDocument();
+    expect(within(account).getByRole("button", { name: "Sign up" })).toBeEnabled();
+    expect(within(account).getByRole("button", { name: "Sign in" })).toBeEnabled();
+    expect(screen.queryByLabelText("Cloud sync email")).not.toBeInTheDocument();
 
-    await user.click(within(account).getByRole("button", { name: "登录" }));
+    await user.click(within(account).getByRole("button", { name: "Sign in" }));
 
-    const modal = await screen.findByRole("dialog", { name: "登录" });
-    const submitButton = within(modal).getByRole("button", { name: "登录" });
+    const modal = await screen.findByRole("dialog", { name: "Sign in" });
+    const submitButton = within(modal).getByRole("button", { name: "Sign in" });
 
-    expect(within(modal).getByText("请输入邮箱和至少 6 位密码")).toBeInTheDocument();
+    expect(within(modal).getByText("Enter an email and a password with at least 6 characters")).toBeInTheDocument();
     expect(submitButton).toBeDisabled();
 
-    await user.type(within(modal).getByLabelText("云同步邮箱"), "learner@example.com");
-    await user.type(within(modal).getByLabelText("云同步密码"), "12345");
+    await user.type(within(modal).getByLabelText("Cloud sync email"), "learner@example.com");
+    await user.type(within(modal).getByLabelText("Cloud sync password"), "12345");
 
-    expect(within(modal).getByText("密码至少 6 位")).toBeInTheDocument();
+    expect(within(modal).getByText("Password must be at least 6 characters")).toBeInTheDocument();
     expect(submitButton).toBeDisabled();
 
-    await user.type(within(modal).getByLabelText("云同步密码"), "6");
+    await user.type(within(modal).getByLabelText("Cloud sync password"), "6");
 
     expect(submitButton).toBeEnabled();
 
@@ -214,9 +214,9 @@ describe("Cloud auth panel", () => {
       email: "learner@example.com",
       password: "123456"
     });
-    expect(await screen.findByRole("region", { name: "账户" })).toHaveTextContent("learner@example.com");
-    expect(await screen.findByText("已登录并开启云同步")).toBeInTheDocument();
-    expect(screen.queryByRole("dialog", { name: "登录" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Account" })).toHaveTextContent("learner@example.com");
+    expect(await screen.findByText("Signed in with cloud sync enabled")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Sign in" })).not.toBeInTheDocument();
   });
 
   it("shows Firebase auth errors inside the auth modal", async () => {
@@ -225,15 +225,15 @@ describe("Cloud auth panel", () => {
 
     render(<App />);
 
-    const account = await screen.findByRole("region", { name: "账户" });
-    await user.click(within(account).getByRole("button", { name: "注册" }));
+    const account = await screen.findByRole("region", { name: "Account" });
+    await user.click(within(account).getByRole("button", { name: "Sign up" }));
 
-    const modal = await screen.findByRole("dialog", { name: "注册" });
-    await user.type(within(modal).getByLabelText("云同步邮箱"), "learner@example.com");
-    await user.type(within(modal).getByLabelText("云同步密码"), "123456");
-    await user.click(within(modal).getByRole("button", { name: "注册" }));
+    const modal = await screen.findByRole("dialog", { name: "Sign up" });
+    await user.type(within(modal).getByLabelText("Cloud sync email"), "learner@example.com");
+    await user.type(within(modal).getByLabelText("Cloud sync password"), "123456");
+    await user.click(within(modal).getByRole("button", { name: "Sign up" }));
 
-    expect(await within(modal).findByRole("alert")).toHaveTextContent("这个邮箱已注册，请直接登录");
+    expect(await within(modal).findByRole("alert")).toHaveTextContent("This email is already registered. Sign in instead.");
   });
 
   it("keeps the user signed in when cloud activation fails after login", async () => {
@@ -242,19 +242,19 @@ describe("Cloud auth panel", () => {
 
     render(<App />);
 
-    const account = await screen.findByRole("region", { name: "账户" });
-    await user.click(within(account).getByRole("button", { name: "登录" }));
+    const account = await screen.findByRole("region", { name: "Account" });
+    await user.click(within(account).getByRole("button", { name: "Sign in" }));
 
-    const modal = await screen.findByRole("dialog", { name: "登录" });
-    await user.type(within(modal).getByLabelText("云同步邮箱"), "learner@example.com");
-    await user.type(within(modal).getByLabelText("云同步密码"), "123456");
-    await user.click(within(modal).getByRole("button", { name: "登录" }));
+    const modal = await screen.findByRole("dialog", { name: "Sign in" });
+    await user.type(within(modal).getByLabelText("Cloud sync email"), "learner@example.com");
+    await user.type(within(modal).getByLabelText("Cloud sync password"), "123456");
+    await user.click(within(modal).getByRole("button", { name: "Sign in" }));
 
     expect(await within(account).findByText("learner@example.com")).toBeInTheDocument();
-    expect(screen.queryByRole("dialog", { name: "登录" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Sign in" })).not.toBeInTheDocument();
     expect(mockApi.enable).toHaveBeenCalledTimes(1);
-    expect(await within(account).findByRole("alert")).toHaveTextContent("已登录，但暂时无法开启云同步");
-    expect(within(account).getByRole("button", { name: "开启" })).toBeEnabled();
+    expect(await within(account).findByRole("alert")).toHaveTextContent("Signed in, but cloud sync could not be enabled");
+    expect(within(account).getByRole("button", { name: "Enable" })).toBeEnabled();
   });
 
   it("keeps passive cloud status failures out of the account dock after sign-in", async () => {
@@ -265,18 +265,18 @@ describe("Cloud auth panel", () => {
 
     render(<App />);
 
-    const account = await screen.findByRole("region", { name: "账户" });
-    await user.click(within(account).getByRole("button", { name: "登录" }));
+    const account = await screen.findByRole("region", { name: "Account" });
+    await user.click(within(account).getByRole("button", { name: "Sign in" }));
 
-    const modal = await screen.findByRole("dialog", { name: "登录" });
-    await user.type(within(modal).getByLabelText("云同步邮箱"), "learner@example.com");
-    await user.type(within(modal).getByLabelText("云同步密码"), "123456");
-    await user.click(within(modal).getByRole("button", { name: "登录" }));
+    const modal = await screen.findByRole("dialog", { name: "Sign in" });
+    await user.type(within(modal).getByLabelText("Cloud sync email"), "learner@example.com");
+    await user.type(within(modal).getByLabelText("Cloud sync password"), "123456");
+    await user.click(within(modal).getByRole("button", { name: "Sign in" }));
 
     expect(await within(account).findByText("learner@example.com")).toBeInTheDocument();
     await waitFor(() => expect(mockApi.getStatus).toHaveBeenCalledTimes(3));
-    expect(within(account).queryByRole("button", { name: "注册" })).not.toBeInTheDocument();
-    expect(within(account).queryByRole("button", { name: "登录" })).not.toBeInTheDocument();
+    expect(within(account).queryByRole("button", { name: "Sign up" })).not.toBeInTheDocument();
+    expect(within(account).queryByRole("button", { name: "Sign in" })).not.toBeInTheDocument();
     expect(within(account).queryByRole("alert")).not.toBeInTheDocument();
   });
 
@@ -290,10 +290,10 @@ describe("Cloud auth panel", () => {
 
     render(<App />);
 
-    const account = await screen.findByRole("region", { name: "账户" });
-    await user.click(within(account).getByRole("button", { name: "刷新云同步" }));
+    const account = await screen.findByRole("region", { name: "Account" });
+    await user.click(within(account).getByRole("button", { name: "Refresh cloud sync" }));
 
-    expect(await within(account).findByRole("alert")).toHaveTextContent("当前无法连接 Firebase，请检查网络后重试");
+    expect(await within(account).findByRole("alert")).toHaveTextContent("Cannot connect to Firebase. Check your network and try again.");
   });
 
   it("allows cloud sync for unverified users and can resend verification", async () => {
@@ -307,17 +307,17 @@ describe("Cloud auth panel", () => {
 
     render(<App />);
 
-    const account = await screen.findByRole("region", { name: "账户" });
-    expect(await within(account).findByText("云端模式 · 已同步")).toBeInTheDocument();
+    const account = await screen.findByRole("region", { name: "Account" });
+    expect(await within(account).findByText("Cloud mode · synced")).toBeInTheDocument();
     expect(within(account).getByText("learner@example.com")).toBeInTheDocument();
-    expect(within(account).queryByRole("button", { name: "注册" })).not.toBeInTheDocument();
-    expect(within(account).queryByRole("button", { name: "登录" })).not.toBeInTheDocument();
-    expect(within(account).getByRole("button", { name: "停用" })).toBeEnabled();
+    expect(within(account).queryByRole("button", { name: "Sign up" })).not.toBeInTheDocument();
+    expect(within(account).queryByRole("button", { name: "Sign in" })).not.toBeInTheDocument();
+    expect(within(account).getByRole("button", { name: "Disable" })).toBeEnabled();
 
-    await user.click(within(account).getByRole("button", { name: "重发验证邮件" }));
+    await user.click(within(account).getByRole("button", { name: "Resend verification email" }));
 
     expect(mockApi.sendVerificationEmail).toHaveBeenCalledTimes(1);
-    expect(await within(account).findByText("验证邮件已重新发送")).toBeInTheDocument();
+    expect(await within(account).findByText("Verification email sent")).toBeInTheDocument();
   });
 
   it("reloads vocabulary when cloud snapshots change", async () => {
@@ -352,18 +352,18 @@ describe("Cloud auth panel", () => {
 
     render(<App />);
 
-    const account = await screen.findByRole("region", { name: "账户" });
-    await user.click(within(account).getByRole("button", { name: "诊断" }));
+    const account = await screen.findByRole("region", { name: "Account" });
+    await user.click(within(account).getByRole("button", { name: "Diagnostics" }));
 
     const dialog = await screen.findByRole("dialog", { name: "Service health" });
     expect(await within(dialog).findByText("degraded")).toBeInTheDocument();
     expect(within(dialog).getByText("Functions")).toBeInTheDocument();
     expect(within(dialog).getByText("http-503")).toBeInTheDocument();
 
-    await user.click(within(dialog).getByRole("button", { name: "上报" }));
+    await user.click(within(dialog).getByRole("button", { name: "Submit" }));
 
     expect(mockApi.submitMonitorSnapshot).toHaveBeenCalledWith(await mockApi.getMonitorSnapshot.mock.results[0].value);
-    expect(await within(dialog).findByText("诊断已上报")).toBeInTheDocument();
+    expect(await within(dialog).findByText("Diagnostics submitted")).toBeInTheDocument();
   });
 
   it("treats missing OpenObserve config as a skipped diagnostics upload", async () => {
@@ -378,13 +378,13 @@ describe("Cloud auth panel", () => {
 
     render(<App />);
 
-    const account = await screen.findByRole("region", { name: "账户" });
-    await user.click(within(account).getByRole("button", { name: "诊断" }));
+    const account = await screen.findByRole("region", { name: "Account" });
+    await user.click(within(account).getByRole("button", { name: "Diagnostics" }));
 
     const dialog = await screen.findByRole("dialog", { name: "Service health" });
-    await user.click(await within(dialog).findByRole("button", { name: "上报" }));
+    await user.click(await within(dialog).findByRole("button", { name: "Submit" }));
 
-    expect(await within(dialog).findByText("OpenObserve 未配置，诊断未上报")).toBeInTheDocument();
+    expect(await within(dialog).findByText("OpenObserve is not configured; diagnostics were not submitted")).toBeInTheDocument();
     expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument();
   });
 
@@ -414,11 +414,11 @@ describe("Cloud auth panel", () => {
     render(<App />);
 
     await waitFor(() => expect(mockApi.subscribe).toHaveBeenCalledTimes(1));
-    await user.click(await screen.findByRole("button", { name: "添加词条" }));
-    await user.type(screen.getByPlaceholderText("例如：侬好"), "谢谢");
-    await user.click(screen.getByRole("button", { name: "保存" }));
+    await user.click(await screen.findByRole("button", { name: "Add word" }));
+    await user.type(screen.getByPlaceholderText("e.g. hello"), "谢谢");
+    await user.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(await screen.findByRole("button", { name: /保存中/ })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: /Saving/ })).toBeDisabled();
 
     mockApi.wordsList.mockResolvedValue([createdWord]);
     await act(async () => {
@@ -426,6 +426,6 @@ describe("Cloud auth panel", () => {
     });
 
     await waitFor(() => expect(mockApi.wordsList).toHaveBeenCalledTimes(4));
-    expect(screen.queryByText("已有同名词条：谢谢")).not.toBeInTheDocument();
+    expect(screen.queryByText("Duplicate word: 谢谢")).not.toBeInTheDocument();
   });
 });
