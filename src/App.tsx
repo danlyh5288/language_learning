@@ -1,4 +1,5 @@
 import * as Dialog from "@radix-ui/react-dialog";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Select from "@radix-ui/react-select";
 import {
   Activity,
@@ -7,6 +8,7 @@ import {
   Check,
   ChevronDown,
   Cloud,
+  Languages,
   ListMusic,
   LogIn,
   LogOut,
@@ -660,8 +662,6 @@ export default function App() {
             </div>
           </div>
 
-          <LocaleToggle locale={locale} i18n={i18n} onChange={changeLocale} />
-
           <nav className="tag-nav">
             <FilterButton
               active={activeTagId === null}
@@ -699,12 +699,14 @@ export default function App() {
             )}
           </div>
 
-          <AccountDock
+          <AccountMenu
             i18n={i18n}
+            locale={locale}
             status={cloudStatus}
             busy={isCloudBusy}
             message={cloudMessage}
             error={authMode ? null : cloudError}
+            onLocaleChange={changeLocale}
             onOpenAuth={openAuthModal}
             onSendVerificationEmail={() => void sendVerificationEmail()}
             onSignOut={() => void signOut()}
@@ -926,31 +928,14 @@ type FilterButtonProps = {
   onClick: () => void;
 };
 
-type LocaleToggleProps = {
+type AccountMenuProps = {
+  i18n: I18nMessages;
   locale: Locale;
-  i18n: I18nMessages;
-  onChange: (locale: Locale) => void;
-};
-
-function LocaleToggle({ locale, i18n, onChange }: LocaleToggleProps) {
-  return (
-    <div className="locale-switch" role="group" aria-label={i18n.locale.ariaLabel}>
-      <button type="button" aria-pressed={locale === "en"} onClick={() => onChange("en")}>
-        {i18n.locale.english}
-      </button>
-      <button type="button" aria-pressed={locale === "zh"} onClick={() => onChange("zh")}>
-        {i18n.locale.chinese}
-      </button>
-    </div>
-  );
-}
-
-type AccountDockProps = {
-  i18n: I18nMessages;
   status: CloudSyncStatus | null;
   busy: boolean;
   message: string | null;
   error: string | null;
+  onLocaleChange: (locale: Locale) => void;
   onOpenAuth: (mode: AuthMode) => void;
   onSendVerificationEmail: () => void;
   onSignOut: () => void;
@@ -960,12 +945,14 @@ type AccountDockProps = {
   onOpenMonitor: () => void;
 };
 
-function AccountDock({
+function AccountMenu({
   i18n,
+  locale,
   status,
   busy,
   message,
   error,
+  onLocaleChange,
   onOpenAuth,
   onSendVerificationEmail,
   onSignOut,
@@ -973,10 +960,13 @@ function AccountDock({
   onDisable,
   onRefresh,
   onOpenMonitor
-}: AccountDockProps) {
+}: AccountMenuProps) {
   const signedIn = Boolean(status?.user);
   const emailVerified = status?.user?.emailVerified ?? false;
   const canEnableCloud = !busy && signedIn;
+  const accountLabel = signedIn
+    ? accountDisplayName(status?.user ?? null, i18n)
+    : i18n.account.signedOutTrigger;
   const statusLabel = status?.isEnabled
     ? status.pendingRecordingUploads > 0
       ? i18n.account.cloudModePendingUploads(status.pendingRecordingUploads)
@@ -986,52 +976,123 @@ function AccountDock({
       : i18n.account.localMode;
 
   return (
-    <section className="account-dock" aria-label={i18n.account.ariaLabel}>
-      <div className="account-heading">
-        <Cloud size={15} />
-        <span>{statusLabel}</span>
-      </div>
-
-      {!signedIn ? (
-        <div className="account-auth-actions">
-          <button type="button" disabled={busy} onClick={() => onOpenAuth("signUp")}>
-            <Plus size={14} />
-            {i18n.account.signUp}
+    <section className="account-menu-dock" aria-label={i18n.account.ariaLabel}>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <button className="account-menu-trigger" type="button">
+            <span className="account-avatar" aria-hidden="true">
+              <UserRound size={16} />
+            </span>
+            <span className="account-trigger-copy">
+              <strong>{accountLabel}</strong>
+              <span>{statusLabel}</span>
+            </span>
+            <ChevronDown className="account-trigger-chevron" size={16} aria-hidden="true" />
           </button>
-          <button type="button" disabled={busy} onClick={() => onOpenAuth("signIn")}>
-            <LogIn size={14} />
-            {i18n.account.signIn}
-          </button>
-        </div>
-      ) : (
-        <div className="cloud-account">
-          <div className="cloud-account-line">
-            <UserRound size={14} />
-            <span className="cloud-email" title={status?.user?.email ?? undefined}>{status?.user?.email ?? i18n.account.signedIn}</span>
-            {!emailVerified ? <span className="verify-pill">{i18n.account.emailNotVerified}</span> : null}
-          </div>
-          <div className="cloud-actions">
-            {status?.isEnabled ? (
-              <button type="button" disabled={busy} onClick={onDisable}>{i18n.account.disable}</button>
-            ) : (
-              <button type="button" disabled={!canEnableCloud} onClick={onEnable}>{i18n.account.enable}</button>
-            )}
-            {!emailVerified ? (
-              <button type="button" disabled={busy} onClick={onSendVerificationEmail}>{i18n.account.resendVerification}</button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content
+            className="account-menu-content"
+            side="top"
+            align="start"
+            sideOffset={8}
+            collisionPadding={16}
+          >
+            <div className="account-menu-header">
+              <span className="account-menu-avatar" aria-hidden="true">
+                <UserRound size={17} />
+              </span>
+              <div>
+                <strong>{accountLabel}</strong>
+                <span title={status?.user?.email ?? undefined}>
+                  {signedIn ? status?.user?.email ?? i18n.account.signedIn : statusLabel}
+                </span>
+              </div>
+            </div>
+            {signedIn && !emailVerified ? (
+              <div className="account-menu-badge">{i18n.account.emailNotVerified}</div>
             ) : null}
-            <button type="button" disabled={busy} aria-label={i18n.account.refreshCloudSync} onClick={onRefresh}>
-              <RefreshCw size={14} />
-            </button>
-            <button type="button" disabled={busy} onClick={onOpenMonitor}>
-              <Activity size={14} />
-              {i18n.account.diagnostics}
-            </button>
-            <button type="button" disabled={busy} aria-label={i18n.account.signOut} onClick={onSignOut}>
-              <LogOut size={14} />
-            </button>
-          </div>
-        </div>
-      )}
+
+            {!signedIn ? (
+              <>
+                <DropdownMenu.Separator className="account-menu-separator" />
+                <DropdownMenu.Item className="account-menu-item" disabled={busy} onSelect={() => onOpenAuth("signIn")}>
+                  <LogIn size={15} />
+                  <span>{i18n.account.signIn}</span>
+                </DropdownMenu.Item>
+                <DropdownMenu.Item className="account-menu-item" disabled={busy} onSelect={() => onOpenAuth("signUp")}>
+                  <Plus size={15} />
+                  <span>{i18n.account.signUp}</span>
+                </DropdownMenu.Item>
+              </>
+            ) : null}
+
+            <DropdownMenu.Separator className="account-menu-separator" />
+            <DropdownMenu.Label className="account-menu-label">
+              <Languages size={14} />
+              <span>{i18n.account.language}</span>
+            </DropdownMenu.Label>
+            <DropdownMenu.RadioGroup value={locale} onValueChange={(value) => onLocaleChange(value as Locale)}>
+              <DropdownMenu.RadioItem className="account-menu-radio" value="en">
+                <span className="account-menu-indicator-slot" aria-hidden="true">
+                  <DropdownMenu.ItemIndicator className="account-menu-indicator">
+                    <Check size={14} />
+                  </DropdownMenu.ItemIndicator>
+                </span>
+                <span>{i18n.locale.english}</span>
+              </DropdownMenu.RadioItem>
+              <DropdownMenu.RadioItem className="account-menu-radio" value="zh">
+                <span className="account-menu-indicator-slot" aria-hidden="true">
+                  <DropdownMenu.ItemIndicator className="account-menu-indicator">
+                    <Check size={14} />
+                  </DropdownMenu.ItemIndicator>
+                </span>
+                <span>{i18n.locale.chinese}</span>
+              </DropdownMenu.RadioItem>
+            </DropdownMenu.RadioGroup>
+
+            {signedIn ? (
+              <>
+                <DropdownMenu.Separator className="account-menu-separator" />
+                <DropdownMenu.Label className="account-menu-label">
+                  <Cloud size={14} />
+                  <span>{i18n.account.cloudSync}</span>
+                </DropdownMenu.Label>
+                {status?.isEnabled ? (
+                  <DropdownMenu.Item className="account-menu-item" disabled={busy} onSelect={() => onDisable()}>
+                    <Cloud size={15} />
+                    <span>{i18n.account.disable}</span>
+                  </DropdownMenu.Item>
+                ) : (
+                  <DropdownMenu.Item className="account-menu-item" disabled={!canEnableCloud} onSelect={() => onEnable()}>
+                    <Cloud size={15} />
+                    <span>{i18n.account.enable}</span>
+                  </DropdownMenu.Item>
+                )}
+                {!emailVerified ? (
+                  <DropdownMenu.Item className="account-menu-item" disabled={busy} onSelect={() => onSendVerificationEmail()}>
+                    <RefreshCw size={15} />
+                    <span>{i18n.account.resendVerification}</span>
+                  </DropdownMenu.Item>
+                ) : null}
+                <DropdownMenu.Item className="account-menu-item" disabled={busy} onSelect={() => onRefresh()}>
+                  <RefreshCw size={15} />
+                  <span>{i18n.account.refreshCloudSync}</span>
+                </DropdownMenu.Item>
+                <DropdownMenu.Item className="account-menu-item" disabled={busy} onSelect={() => onOpenMonitor()}>
+                  <Activity size={15} />
+                  <span>{i18n.account.diagnostics}</span>
+                </DropdownMenu.Item>
+                <DropdownMenu.Separator className="account-menu-separator" />
+                <DropdownMenu.Item className="account-menu-item danger" disabled={busy} onSelect={() => onSignOut()}>
+                  <LogOut size={15} />
+                  <span>{i18n.account.signOutShort}</span>
+                </DropdownMenu.Item>
+              </>
+            ) : null}
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
       {error ? <p className="cloud-feedback error" role="alert">{error}</p> : null}
       {message && !error ? <p className="cloud-feedback ok" role="status"><Check size={14} />{message}</p> : null}
     </section>
@@ -1527,6 +1588,15 @@ function formatDuration(ms: number | null | undefined): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function accountDisplayName(user: CloudUser | null, i18n: I18nMessages): string {
+  if (!user?.email) {
+    return i18n.account.signedIn;
+  }
+
+  const [name] = user.email.split("@");
+  return name || user.email;
 }
 
 function summarizeMonitorStatus(snapshot: MonitorSnapshot): HealthStatus {
