@@ -9,6 +9,7 @@
     "@react-native-firebase/storage": "^24.1.1",
     "expo": "~56.0.12",
     "expo-audio": "~56.0.12",
+    "expo-build-properties": "~56.0.19",
     "expo-dev-client": "~56.0.20",
     "expo-file-system": "~56.0.8",
     "expo-sqlite": "~56.0.5",
