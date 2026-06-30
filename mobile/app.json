@@ -28,14 +28,26 @@
     "plugins": [
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
-      "@react-native-firebase/firestore",
-      "@react-native-firebase/storage",
       [
         "expo-audio",
         {
           "microphonePermission": "允许发音词库访问麦克风，以保存你的本地发音录音。",
           "enableBackgroundRecording": false,
           "enableBackgroundPlayback": false
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static",
+            "forceStaticLinking": [
+              "RNFBApp",
+              "RNFBAuth",
+              "RNFBFirestore",
+              "RNFBStorage"
+            ]
+          }
         }
       ]
     ]
