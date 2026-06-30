@@ -865,6 +865,7 @@ export default function App() {
                 i18n={i18n}
                 hasExistingRecording={Boolean(selectedWord?.hasRecording || pendingRecording)}
                 hasPendingRecording={Boolean(pendingRecording)}
+                idleDurationMs={pendingRecording?.durationMs ?? selectedWord?.audioDurationMs ?? null}
                 onDiscard={clearPendingRecording}
                 onPreview={handlePendingRecording}
               />
@@ -1414,11 +1415,12 @@ type AudioRecorderProps = {
   i18n: I18nMessages;
   hasExistingRecording: boolean;
   hasPendingRecording: boolean;
+  idleDurationMs: number | null;
   onPreview: (blob: Blob, durationMs: number) => void;
   onDiscard: () => void;
 };
 
-function AudioRecorder({ i18n, hasExistingRecording, hasPendingRecording, onPreview, onDiscard }: AudioRecorderProps) {
+function AudioRecorder({ i18n, hasExistingRecording, hasPendingRecording, idleDurationMs, onPreview, onDiscard }: AudioRecorderProps) {
   const [status, setStatus] = useState<"idle" | "recording" | "processing">("idle");
   const [elapsedMs, setElapsedMs] = useState(0);
   const [level, setLevel] = useState(0);
@@ -1457,6 +1459,7 @@ function AudioRecorder({ i18n, hasExistingRecording, hasPendingRecording, onPrev
 
   async function startRecording() {
     setRecordingError(null);
+    setElapsedMs(0);
 
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
       setRecordingError(i18n.recorder.unsupported);
@@ -1530,6 +1533,7 @@ function AudioRecorder({ i18n, hasExistingRecording, hasPendingRecording, onPrev
   }
 
   const activeBars = Math.max(1, Math.round(level * 22));
+  const timerDurationMs = status === "idle" ? idleDurationMs : elapsedMs;
 
   return (
     <div className="recorder">
@@ -1553,7 +1557,7 @@ function AudioRecorder({ i18n, hasExistingRecording, hasPendingRecording, onPrev
           </button>
         ) : null}
 
-        <span className="timer">{formatDuration(elapsedMs)}</span>
+        <span className="timer">{formatDuration(timerDurationMs)}</span>
       </div>
 
       <div className={`level-meter ${status === "recording" ? "is-live" : ""}`} aria-label={i18n.recorder.inputLevel}>

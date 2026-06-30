@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import App from "./App";
 
 describe("Pronunciation vault MVP", () => {
@@ -65,4 +65,93 @@ describe("Pronunciation vault MVP", () => {
 
     expect(await screen.findByRole("heading", { name: "发音词库" })).toBeInTheDocument();
   });
+
+  it("resets the recorder timer when starting a new word after saving a recording", async () => {
+    const restoreMediaDevices = mockBrowserRecording(1600);
+    const user = userEvent.setup();
+
+    try {
+      render(<App />);
+
+      await user.click(await screen.findByRole("button", { name: "Add word" }));
+      await user.type(screen.getByPlaceholderText("e.g. hello"), "recorded word");
+      await user.click(screen.getByRole("button", { name: "Record" }));
+      await user.click(await screen.findByRole("button", { name: "Stop" }));
+
+      expect(await screen.findByText("New recording 0:02")).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Save" }));
+      expect(await screen.findByText("Saved")).toBeInTheDocument();
+      expect(document.querySelector(".recorder .timer")).toHaveTextContent("0:02");
+
+      await user.click(screen.getByRole("button", { name: "Add word" }));
+
+      expect(screen.getByText("No recording yet")).toBeInTheDocument();
+      expect(document.querySelector(".recorder .timer")).toHaveTextContent("0:00");
+    } finally {
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+      restoreMediaDevices();
+    }
+  });
 });
+
+function mockBrowserRecording(durationMs: number): () => void {
+  const originalNow = performance.now.bind(performance);
+  const originalMediaDevices = Object.getOwnPropertyDescriptor(navigator, "mediaDevices");
+  let startedAt = 0;
+
+  class FakeMediaRecorder extends EventTarget {
+    static isTypeSupported = () => true;
+    state: "inactive" | "recording" = "inactive";
+    mimeType = "audio/webm";
+
+    start() {
+      startedAt = originalNow();
+      this.state = "recording";
+    }
+
+    stop() {
+      this.state = "inactive";
+      vi.spyOn(performance, "now").mockReturnValue(startedAt + durationMs);
+      this.dispatchEvent(new BlobEvent("dataavailable", { data: new Blob(["audio"], { type: this.mimeType }) }));
+      this.dispatchEvent(new Event("stop"));
+    }
+  }
+
+  class FakeAudioContext {
+    createMediaStreamSource() {
+      return { connect: vi.fn() };
+    }
+
+    createAnalyser() {
+      return {
+        fftSize: 1024,
+        getByteTimeDomainData: (samples: Uint8Array) => samples.fill(128)
+      };
+    }
+
+    close = vi.fn();
+  }
+
+  vi.stubGlobal("requestAnimationFrame", vi.fn(() => 1));
+  vi.stubGlobal("cancelAnimationFrame", vi.fn());
+  vi.stubGlobal("MediaRecorder", FakeMediaRecorder);
+  vi.stubGlobal("AudioContext", FakeAudioContext);
+  Object.defineProperty(navigator, "mediaDevices", {
+    configurable: true,
+    value: {
+      getUserMedia: vi.fn(async () => ({
+        getTracks: () => [{ stop: vi.fn() }]
+      }))
+    }
+  });
+
+  return () => {
+    if (originalMediaDevices) {
+      Object.defineProperty(navigator, "mediaDevices", originalMediaDevices);
+    } else {
+      Reflect.deleteProperty(navigator, "mediaDevices");
+    }
+  };
+}
