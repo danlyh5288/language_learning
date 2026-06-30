@@ -24,69 +24,264 @@ export const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bg
   },
-  cloudBar: {
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+  tabScene: {
+    flex: 1,
+    backgroundColor: colors.bg
+  },
+  bottomTabSafeArea: {
+    flexShrink: 0,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
     backgroundColor: colors.surface
   },
-  cloudStatusText: {
+  bottomTabBar: {
+    height: 62,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingTop: 7,
+    paddingBottom: 7
+  },
+  bottomTabButton: {
+    flex: 1,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
+    borderRadius: 8
+  },
+  bottomTabButtonActive: {
+    backgroundColor: colors.primarySoft
+  },
+  bottomTabText: {
     color: colors.muted,
     fontSize: 12,
     fontWeight: "800"
   },
-  cloudRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8
+  bottomTabTextActive: {
+    color: colors.primaryStrong
   },
-  cloudEmail: {
+  accountSafeArea: {
     flex: 1,
-    minWidth: 0,
+    backgroundColor: colors.bg
+  },
+  accountKeyboard: {
+    flex: 1
+  },
+  accountScroll: {
+    flex: 1
+  },
+  accountContent: {
+    gap: 14,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 24
+  },
+  accountHeader: {
+    gap: 4,
+    paddingVertical: 6
+  },
+  accountEyebrow: {
+    color: colors.primaryStrong,
+    fontSize: 12,
+    fontWeight: "800"
+  },
+  accountTitle: {
     color: colors.text,
-    fontSize: 13,
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: "800"
+  },
+  accountSubtitle: {
+    color: colors.muted,
+    fontSize: 14,
     fontWeight: "700"
   },
-  cloudAuthRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 8
-  },
-  cloudInput: {
-    minWidth: 128,
-    flexGrow: 1,
-    minHeight: 38,
-    paddingHorizontal: 10,
+  accountCard: {
+    gap: 14,
+    padding: 15,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 8,
-    color: colors.text,
-    backgroundColor: "#f7faf8"
+    backgroundColor: colors.surface
   },
-  cloudButton: {
-    minHeight: 36,
+  accountProfileRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12
+  },
+  accountAvatar: {
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.primarySoft
+  },
+  accountProfileCopy: {
+    flex: 1,
+    minWidth: 0
+  },
+  accountCardTitle: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: "800"
+  },
+  accountEmail: {
+    marginTop: 3,
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: "700"
+  },
+  accountBadge: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 999,
+    overflow: "hidden",
+    color: colors.warning,
+    backgroundColor: colors.warningSoft,
+    fontSize: 12,
+    fontWeight: "800"
+  },
+  accountBadgeOk: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 999,
+    overflow: "hidden",
+    color: colors.primaryStrong,
+    backgroundColor: colors.primarySoft,
+    fontSize: 12,
+    fontWeight: "800"
+  },
+  accountStatusLine: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "700"
+  },
+  accountSectionTitle: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: "800"
+  },
+  accountHelper: {
+    marginTop: -3,
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "700"
+  },
+  accountAuthActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
+  },
+  accountPrimaryButton: {
+    minHeight: 44,
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 13,
+    borderRadius: 8,
+    backgroundColor: colors.primary
+  },
+  accountPrimaryButtonText: {
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "800"
+  },
+  accountSecondaryButton: {
+    minHeight: 44,
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 13,
     borderRadius: 8,
     backgroundColor: colors.primarySoft
   },
-  cloudButtonDisabled: {
-    backgroundColor: "#e8efec"
+  accountSecondaryButtonText: {
+    color: colors.primaryStrong,
+    fontSize: 14,
+    fontWeight: "800"
   },
-  cloudButtonText: {
+  accountButtonDisabled: {
+    opacity: 0.55
+  },
+  accountAction: {
+    minHeight: 66,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: "#f7faf8"
+  },
+  accountActionDisabled: {
+    opacity: 0.55
+  },
+  accountActionIcon: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: colors.surface
+  },
+  accountActionCopy: {
+    flex: 1,
+    minWidth: 0
+  },
+  accountActionLabel: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: "800"
+  },
+  accountActionLabelDanger: {
+    color: colors.danger
+  },
+  accountActionDetail: {
+    marginTop: 3,
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700"
+  },
+  accountFeedback: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderRadius: 8
+  },
+  accountFeedbackOk: {
+    borderColor: "#b9ddcf",
+    backgroundColor: colors.primarySoft
+  },
+  accountFeedbackError: {
+    borderColor: "#f4b7ae",
+    backgroundColor: colors.dangerSoft
+  },
+  accountFeedbackOkText: {
+    flex: 1,
     color: colors.primaryStrong,
     fontSize: 13,
     fontWeight: "800"
   },
-  cloudErrorText: {
+  accountFeedbackErrorText: {
+    flex: 1,
     color: colors.danger,
-    fontSize: 12,
-    fontWeight: "700"
+    fontSize: 13,
+    fontWeight: "800"
   },
   screen: {
     flex: 1,
@@ -194,17 +389,23 @@ export const styles = StyleSheet.create({
     paddingVertical: 9
   },
   filterRail: {
+    alignItems: "center",
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 10,
     paddingBottom: 10,
     gap: 8
   },
+  filterRailScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+    height: 58
+  },
   chip: {
-    minHeight: 36,
+    height: 38,
     flexDirection: "row",
     alignItems: "center",
+    alignSelf: "flex-start",
     gap: 7,
-    marginRight: 8,
     paddingHorizontal: 11,
     borderRadius: 999,
     backgroundColor: colors.surface,
@@ -216,6 +417,7 @@ export const styles = StyleSheet.create({
     borderColor: "#b9ddcf"
   },
   chipText: {
+    maxWidth: 132,
     color: colors.muted,
     fontSize: 13,
     fontWeight: "800"
@@ -340,6 +542,19 @@ export const styles = StyleSheet.create({
   field: {
     gap: 7,
     marginBottom: 15
+  },
+  tagChoiceScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+    height: 42
+  },
+  tagChoiceRail: {
+    alignItems: "center",
+    gap: 8,
+    paddingRight: 4
+  },
+  tagChoiceChip: {
+    maxWidth: 180
   },
   label: {
     color: colors.muted,

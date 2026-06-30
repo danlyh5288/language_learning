@@ -267,7 +267,7 @@ export function VocabularyScreen({ repository, recordingFiles }: VocabularyScree
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.screen}
       >
-        <SafeAreaView style={styles.safeArea}>
+        <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
           <DetailHeader
             title={mode.isCreating ? "新词条" : selectedWord?.text ?? "词条详情"}
             canDelete={Boolean(selectedWord)}
@@ -299,7 +299,12 @@ export function VocabularyScreen({ repository, recordingFiles }: VocabularyScree
 
               <View style={styles.field}>
                 <Text style={styles.label}>标签</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.tagChoiceScroll}
+                  contentContainerStyle={styles.tagChoiceRail}
+                >
                   <TagChoice
                     label="未分类"
                     active={draft.tagId === null}
@@ -382,7 +387,7 @@ export function VocabularyScreen({ repository, recordingFiles }: VocabularyScree
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
       <View style={styles.header}>
         <View style={styles.brandCluster}>
           <Image source={appLogo} style={styles.logo} accessibilityIgnoresInvertColors />
@@ -414,7 +419,12 @@ export function VocabularyScreen({ repository, recordingFiles }: VocabularyScree
         ) : null}
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRail}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filterRailScroll}
+        contentContainerStyle={styles.filterRail}
+      >
         <FilterChip
           active={activeTagId === null}
           icon={<ListMusic size={15} color={activeTagId === null ? colors.primaryStrong : colors.muted} />}
@@ -535,9 +545,9 @@ type TagChoiceProps = {
 
 function TagChoice({ active, label, color, onPress }: TagChoiceProps) {
   return (
-    <Pressable style={[styles.chip, active ? styles.chipActive : null]} onPress={onPress}>
+    <Pressable style={[styles.chip, styles.tagChoiceChip, active ? styles.chipActive : null]} onPress={onPress}>
       <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: color ?? colors.faint }} />
-      <Text style={[styles.chipText, active ? styles.chipTextActive : null]}>{label}</Text>
+      <Text style={[styles.chipText, active ? styles.chipTextActive : null]} numberOfLines={1}>{label}</Text>
     </Pressable>
   );
 }
