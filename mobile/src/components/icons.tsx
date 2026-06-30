@@ -35,6 +35,14 @@ export function Check({ size = 24, color = "currentColor" }: IconProps) {
   );
 }
 
+export function Cloud({ size = 24, color = "currentColor" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d="M17.5 19H8a6 6 0 1 1 5.5-8.4A4.5 4.5 0 1 1 17.5 19Z" stroke={color} {...outlineProps} />
+    </Svg>
+  );
+}
+
 export function ChevronLeft({ size = 24, color = "currentColor" }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
@@ -52,6 +60,26 @@ export function ListMusic({ size = 24, color = "currentColor" }: IconProps) {
       <Circle cx="3.5" cy="6" r="1.5" stroke={color} {...outlineProps} />
       <Circle cx="3.5" cy="12" r="1.5" stroke={color} {...outlineProps} />
       <Circle cx="3.5" cy="18" r="1.5" stroke={color} {...outlineProps} />
+    </Svg>
+  );
+}
+
+export function LogIn({ size = 24, color = "currentColor" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" stroke={color} {...outlineProps} />
+      <Polyline points="10 17 15 12 10 7" stroke={color} {...outlineProps} />
+      <Line x1="15" y1="12" x2="3" y2="12" stroke={color} {...outlineProps} />
+    </Svg>
+  );
+}
+
+export function LogOut({ size = 24, color = "currentColor" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke={color} {...outlineProps} />
+      <Polyline points="16 17 21 12 16 7" stroke={color} {...outlineProps} />
+      <Line x1="21" y1="12" x2="9" y2="12" stroke={color} {...outlineProps} />
     </Svg>
   );
 }
@@ -93,6 +121,17 @@ export function RotateCcw({ size = 24, color = "currentColor" }: IconProps) {
   );
 }
 
+export function RefreshCw({ size = 24, color = "currentColor" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Polyline points="23 4 23 10 17 10" stroke={color} {...outlineProps} />
+      <Polyline points="1 20 1 14 7 14" stroke={color} {...outlineProps} />
+      <Path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10" stroke={color} {...outlineProps} />
+      <Path d="M20.5 15a9 9 0 0 1-14.9 3.4L1 14" stroke={color} {...outlineProps} />
+    </Svg>
+  );
+}
+
 export function Search({ size = 24, color = "currentColor" }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
@@ -127,6 +166,15 @@ export function Trash2({ size = 24, color = "currentColor" }: IconProps) {
       <Path d="M6 6l1 15h10l1-15" stroke={color} {...outlineProps} />
       <Line x1="10" y1="11" x2="10" y2="17" stroke={color} {...outlineProps} />
       <Line x1="14" y1="11" x2="14" y2="17" stroke={color} {...outlineProps} />
+    </Svg>
+  );
+}
+
+export function UserRound({ size = 24, color = "currentColor" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Circle cx="12" cy="8" r="5" stroke={color} {...outlineProps} />
+      <Path d="M20 21a8 8 0 0 0-16 0" stroke={color} {...outlineProps} />
     </Svg>
   );
 }
